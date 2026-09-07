@@ -70,12 +70,9 @@ def test_persists_and_retrieves_workflow_execution_and_nodes(
                 await transaction.workflow_executions.get_execution_by_id(execution.execution_id)
                 == execution
             )
-            assert (
-                await transaction.node_executions.get_node_executions_for_execution(
-                    execution.execution_id
-                )
-                == [node_execution]
-            )
+            assert await transaction.node_executions.get_node_executions_for_execution(
+                execution.execution_id
+            ) == [node_execution]
 
     asyncio.run(scenario())
 
