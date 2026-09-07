@@ -1,5 +1,5 @@
 name: Lint and Test
-description: Lint everything then run the Django tests
+description: Lint everything then run the API entry-point tests
 
 runs:
   using: composite
@@ -31,13 +31,9 @@ runs:
         uv run pre-commit run --all-files
       shell: bash
 
-#    - name: Test with pytest
-#      env:
-#        DATABASE_HOST: localhost
-#        DATABASE_PASS: mysql_password123
-#        DATABASE_NAME: hoxtonmix
-#        DATABASE_USER: root
-#        DJANGO_SETTINGS_MODULE: conf.settings.test
-#        LOG_LEVEL: DEBUG
-#      run: uv run coverage run --omit="*/test*" -m pytest -n auto --disable-warnings
-#      shell: bash
+    - name: Run API entry-point tests
+      env:
+        PYTHONPATH: .
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/applied_ai_db
+      run: uv run pytest -q tests/unit/test_main.py
+      shell: bash

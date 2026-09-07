@@ -7,6 +7,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "pre-commit>=3.8,<4.0",
   "fastapi>=0.115,<1.0",
+  "pydantic>=2.8,<3.0",
   "uvicorn[standard]>=0.32,<1.0",
   "sqlalchemy>=2.0,<3.0",
   "asyncpg>=0.29,<1.0",
@@ -21,7 +22,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = []
-packages = ["app", "app.api", "app.db", "app.messaging", "app.messaging.redis", "app.orchestrator", "app.worker"]
+packages = ["app", "app.api", "app.db", "app.domain", "app.messaging", "app.messaging.redis", "app.orchestrator", "app.worker"]
 
 [tool.uv]
 dev-dependencies = [
@@ -63,3 +64,4 @@ omit = ["*/test*"]
 python_version = "3.12"
 strict = true
 warn_unused_configs = true
+plugins = ["pydantic.mypy"]

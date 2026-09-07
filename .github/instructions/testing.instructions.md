@@ -16,6 +16,7 @@ applyTo: "**/*"
 ## Unit tests (controller-level API tests)
 
 - In this repository, "unit tests" are endpoint-focused tests at the controller/API boundary.
+- Only add tests at service entry points/controllers; do not add direct unit tests for internal/domain modules unless explicitly requested.
 - Do not spend effort on method-level tests for internal implementation details.
 - Test endpoint permutations thoroughly: success, validation failures, auth/permission failures, not found, conflict, downstream failure, and key edge-case inputs.
 - Assert externally observable behavior: status code, response shape/body, and side effects.
