@@ -1,0 +1,46 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint and Test
+        uses: ./.github/actions/lint-and-test
+
+  build-docker-image:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    outputs:
+      docker-image-url: ${{ steps.build-image.outputs.DOCKER_IMAGE_URL }}
+    timeout-minutes: 20
+    concurrency:
+      group: deploy_production
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: 3.11
+
+
+  deploy-production-api:
+    runs-on: ubuntu-latest
+    needs: build-docker-image
+    timeout-minutes: 20
+    env:
+      DOCKER_IMAGE_URL: ${{ needs.build-docker-image.outputs.docker-image-url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+

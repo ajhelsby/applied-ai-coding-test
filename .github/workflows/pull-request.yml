@@ -1,0 +1,39 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgresql:
+        image: mysql:8.0.32
+        env:
+          MYSQL_ROOT_PASSWORD: mysql_password123
+          MYSQL_DATABASE: hoxtonmix
+        ports: ["3306:3306"]
+
+    steps:
+      - name: Cloning repo
+        uses: actions/checkout@v7
+
+      - name: Lint and Test
+        uses: ./.github/actions/lint-and-test
+
+#  docker-compose-build-and-test:
+#    name: Build and Test Docker image
+#    runs-on: namespace-profile-api
+#
+#    steps:
+#      - name: Checkout PR branch
+#        uses: actions/checkout@v7
+#
+#      - name: Build Docker image
+#        run: docker compose -f docker-compose-test.yml build web
+#
+#      - name: Run Docker image
+#        run: docker compose -f docker-compose-test.yml run web
