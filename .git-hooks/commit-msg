@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -e
+
+# Arguments provided by Git
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="${2:-}"
+
+# Path to the AI generation script
+AI_SCRIPT="$(git rev-parse --show-toplevel)/.git-hooks/generate-commit-message.sh"
+
+# ------------------------------------------------------------
+# Skip merge and squash commits
+# ------------------------------------------------------------
+
+if [[ "$COMMIT_SOURCE" == "merge" || "$COMMIT_SOURCE" == "squash" ]]; then
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# Check that the AI script exists
+# ------------------------------------------------------------
+
+if [[ ! -f "$AI_SCRIPT" ]]; then
+    echo "❌ AI commit message script not found:"
+    echo "$AI_SCRIPT"
+    exit 1
+fi
+
+# ------------------------------------------------------------
+# Generate the commit message
+#
+# The generation script is responsible for:
+#   - Reading the current branch
+#   - Extracting the commit type
+#   - Extracting the GitHub issue number
+#   - Reading the staged diff
+#   - Calling OpenAI
+#   - Writing the final commit message
+# ------------------------------------------------------------
+
+bash "$AI_SCRIPT" "$COMMIT_MSG_FILE"
+
+# ------------------------------------------------------------
+# Make sure a commit message was generated
+# ------------------------------------------------------------
+
+if [[ ! -s "$COMMIT_MSG_FILE" ]]; then
+    echo "❌ AI did not generate a commit message."
+    exit 1
+fi
+
+exit 0

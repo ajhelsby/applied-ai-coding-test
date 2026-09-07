@@ -1,0 +1,43 @@
+name: Lint and Test
+description: Lint everything then run the Django tests
+
+runs:
+  using: composite
+
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.12
+
+    - name: Setup pre-commit cache
+      if: ${{ inputs.namespace_runners == 'true' }}
+      uses: namespacelabs/nscloud-cache-action@v1
+      with:
+        path: |
+          ~/.cache/pre-commit
+          ~/.cache/uv
+
+    - name: Install uv and dependencies
+      run: |
+        pip install uv
+        uv sync
+      shell: bash
+
+    - name: Run Linters
+      run: |
+        uv run pre-commit run --all-files
+      shell: bash
+
+#    - name: Test with pytest
+#      env:
+#        DATABASE_HOST: localhost
+#        DATABASE_PASS: mysql_password123
+#        DATABASE_NAME: hoxtonmix
+#        DATABASE_USER: root
+#        DJANGO_SETTINGS_MODULE: conf.settings.test
+#        LOG_LEVEL: DEBUG
+#      run: uv run coverage run --omit="*/test*" -m pytest -n auto --disable-warnings
+#      shell: bash
