@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.execution import WorkflowExecution
@@ -64,7 +64,10 @@ class SqlAlchemyWorkflowExecutionRepository(WorkflowExecutionRepository):
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> bool:
-        values: dict[str, object] = {"status": new_status.value}
+        values: dict[str, object] = {
+            "status": new_status.value,
+            "updated_at": func.now(),
+        }
         if started_at is not None:
             values["started_at"] = started_at
         if completed_at is not None:

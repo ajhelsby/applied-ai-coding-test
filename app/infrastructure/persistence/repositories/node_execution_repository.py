@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,6 +70,7 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
                 "error_type": node_execution.error_type,
                 "started_at": node_execution.started_at,
                 "completed_at": node_execution.completed_at,
+                "updated_at": func.now(),
             },
         )
         await self._session.execute(statement)
@@ -88,7 +89,10 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> bool:
-        values: dict[str, Any] = {"status": new_status.value}
+        values: dict[str, Any] = {
+            "status": new_status.value,
+            "updated_at": func.now(),
+        }
         if output_data is not None:
             values["output_data"] = output_data
         if error_message is not None:
