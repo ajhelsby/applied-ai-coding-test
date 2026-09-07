@@ -1,6 +1,6 @@
 from typing import Final
 
-from redis import asyncio as aioredis
+from redis import asyncio as aioredis  # type: ignore[import-untyped]
 
 from app.messaging.redis.client import get_async_redis_client
 
@@ -14,7 +14,8 @@ async def publish(
     client: aioredis.Redis | None = None,
 ) -> str:
     redis_client = client or get_async_redis_client()
-    return await redis_client.xadd(name=stream, fields=fields)
+    message_id = await redis_client.xadd(name=stream, fields=fields)
+    return str(message_id)
 
 
 async def consume(

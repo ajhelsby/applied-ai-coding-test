@@ -23,6 +23,7 @@ dev-dependencies = [
   "black>=24.8,<25.0",
   "isort>=5.13,<6.0",
   "mypy>=1.11,<2.0",
+  "types-redis>=4.6,<5.0",
 ]
 
 [tool.ruff]
