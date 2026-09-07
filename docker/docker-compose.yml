@@ -10,7 +10,7 @@ services:
         "python",
         "-m",
         "uvicorn",
-        "app.main:app",
+        "app.api.main:app",
         "--host",
         "0.0.0.0",
         "--port",
@@ -25,6 +25,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -34,13 +36,15 @@ services:
       dockerfile: docker/Dockerfile
       target: worker
     restart: unless-stopped
-    command: ["python", "-m", "app.orchestrator"]
+    command: ["python", "-m", "app.orchestrator.main"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      redis-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -51,13 +55,15 @@ services:
       dockerfile: docker/Dockerfile
       target: worker
     restart: unless-stopped
-    command: ["python", "-m", "app.worker"]
+    command: ["python", "-m", "app.worker.main"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      redis-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -68,10 +74,22 @@ services:
       dockerfile: docker/Dockerfile
       target: migrate
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${MIGRATE_DATABASE_URL}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       postgres:
+        condition: service_healthy
+
+  redis-init:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: redis-init
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      redis:
         condition: service_healthy
 
   postgres:

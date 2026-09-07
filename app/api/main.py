@@ -3,7 +3,7 @@ from typing import Any, cast
 
 from fastapi import FastAPI
 
-from app.db import close_database_connections
+from app.db.session import close_database_connections
 
 app = FastAPI(title="Workflow Engine API")
 

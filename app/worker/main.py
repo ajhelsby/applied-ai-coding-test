@@ -6,6 +6,7 @@ running = True
 
 
 def _handle_signal(signum: int, _frame: object) -> None:
+    del signum
     global running
     running = False
 
@@ -15,12 +16,12 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     log_level = os.getenv("LOG_LEVEL", "INFO")
-    print(f"orchestrator started (LOG_LEVEL={log_level})", flush=True)
+    print(f"worker started (LOG_LEVEL={log_level})", flush=True)
 
     while running:
         time.sleep(1)
 
-    print("orchestrator stopped", flush=True)
+    print("worker stopped", flush=True)
 
 
 if __name__ == "__main__":

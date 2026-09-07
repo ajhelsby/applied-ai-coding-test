@@ -221,3 +221,4 @@ __marimo__/
 docker/db/**
 !docker/db/
 !docker/db/init.sql
+.DS_Store

@@ -5,7 +5,7 @@ default_language_version:
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.4
+    rev: v0.16.6
     hooks:
       - id: ruff
         args: [--fix]
@@ -29,6 +29,6 @@ repos:
         types_or: [yaml, json, markdown]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+    rev: v2.3.1
     hooks:
       - id: mypy
