@@ -1,5 +1,5 @@
 import os
-from typing import Final
+from typing import Final, cast
 
 import redis
 from redis import Redis
@@ -8,8 +8,8 @@ from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
 _REDIS_URL_ENV: Final[str] = "REDIS_URL"
-_redis_client: Redis | None = None
-_async_redis_client: aioredis.Redis | None = None
+_redis_client: Redis[str] | None = None
+_async_redis_client: aioredis.Redis[str] | None = None
 
 
 def _get_redis_url() -> str:
@@ -19,7 +19,7 @@ def _get_redis_url() -> str:
     return redis_url
 
 
-def get_redis_client() -> Redis:
+def get_redis_client() -> Redis[str]:
     global _redis_client
     if _redis_client is None:
         _redis_client = redis.Redis.from_url(
@@ -45,17 +45,20 @@ def close_redis_client() -> None:
         _redis_client = None
 
 
-def get_async_redis_client() -> aioredis.Redis:
+def get_async_redis_client() -> aioredis.Redis[str]:
     global _async_redis_client
     if _async_redis_client is None:
-        _async_redis_client = aioredis.from_url(
-            _get_redis_url(),
-            decode_responses=True,
-            retry=Retry(ExponentialBackoff(base=1, cap=10), retries=5),
-            retry_on_error=[redis.ConnectionError, redis.TimeoutError],
-            socket_connect_timeout=5,
-            socket_timeout=5,
-            health_check_interval=30,
+        _async_redis_client = cast(
+            aioredis.Redis[str],
+            aioredis.from_url(
+                _get_redis_url(),
+                decode_responses=True,
+                retry=Retry(ExponentialBackoff(base=1, cap=10), retries=5),
+                retry_on_error=[redis.ConnectionError, redis.TimeoutError],
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                health_check_interval=30,
+            ),
         )
     return _async_redis_client
 
@@ -67,5 +70,5 @@ async def ping_async_redis() -> bool:
 async def close_async_redis_client() -> None:
     global _async_redis_client
     if _async_redis_client is not None:
-        await _async_redis_client.aclose()
+        await _async_redis_client.close()
         _async_redis_client = None

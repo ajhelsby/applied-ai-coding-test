@@ -1,4 +1,4 @@
-from typing import Final
+from typing import Final, cast
 
 from redis import asyncio as aioredis
 
@@ -11,7 +11,7 @@ WORKFLOW_EVENTS_STREAM: Final[str] = "workflow.events"
 async def publish(
     stream: str,
     fields: dict[str, str],
-    client: aioredis.Redis | None = None,
+    client: aioredis.Redis[str] | None = None,
 ) -> str:
     redis_client = client or get_async_redis_client()
     message_id = await redis_client.xadd(name=stream, fields=fields)
@@ -24,7 +24,7 @@ async def consume(
     streams: dict[str, str],
     count: int = 1,
     block_ms: int = 5000,
-    client: aioredis.Redis | None = None,
+    client: aioredis.Redis[str] | None = None,
 ) -> list[tuple[str, list[tuple[str, dict[str, str]]]]]:
     redis_client = client or get_async_redis_client()
     response = await redis_client.xreadgroup(
@@ -41,10 +41,12 @@ async def ack(
     stream: str,
     group: str,
     message_id: str,
-    client: aioredis.Redis | None = None,
+    client: aioredis.Redis[str] | None = None,
 ) -> int:
     redis_client = client or get_async_redis_client()
-    return int(await redis_client.xack(stream, group, message_id))
+    # redis-py types do not currently type xack; keep a narrow ignore on this call.
+    ack_count = await redis_client.xack(stream, group, message_id)  # type: ignore[no-untyped-call]
+    return int(cast(int, ack_count))
 
 
 async def autoclaim(
@@ -54,7 +56,7 @@ async def autoclaim(
     min_idle_ms: int,
     start_id: str = "0-0",
     count: int = 100,
-    client: aioredis.Redis | None = None,
+    client: aioredis.Redis[str] | None = None,
 ) -> tuple[str, list[tuple[str, dict[str, str]]], list[str]]:
     redis_client = client or get_async_redis_client()
     next_start_id, claimed_messages, deleted_messages = await redis_client.xautoclaim(

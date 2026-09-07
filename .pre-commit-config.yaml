@@ -28,7 +28,10 @@ repos:
         exclude: ^(CHANGELOG\.md|release-please-config\.json|\.release-please-manifest\.json)$
         types_or: [yaml, json, markdown]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.1
+  - repo: local
     hooks:
       - id: mypy
+        name: mypy (uv)
+        entry: uv run mypy app
+        language: system
+        pass_filenames: false
