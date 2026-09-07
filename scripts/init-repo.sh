@@ -6,6 +6,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOOKS_DIR="$ROOT_DIR/.git/hooks"
 SOURCE_HOOK="$ROOT_DIR/.git-hooks/commit-msg"
 TARGET_HOOK="$HOOKS_DIR/commit-msg"
+SOURCE_PRE_COMMIT_HOOK="$ROOT_DIR/.git-hooks/pre-commit"
+TARGET_PRE_COMMIT_HOOK="$HOOKS_DIR/pre-commit"
 PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
 
 if [[ ! -d "$ROOT_DIR/.git" ]]; then
@@ -36,5 +38,8 @@ fi
 mkdir -p "$HOOKS_DIR"
 cp "$SOURCE_HOOK" "$TARGET_HOOK"
 chmod +x "$TARGET_HOOK"
+cp "$SOURCE_PRE_COMMIT_HOOK" "$TARGET_PRE_COMMIT_HOOK"
+chmod +x "$TARGET_PRE_COMMIT_HOOK"
 
 echo "Installed commit-msg hook to .git/hooks/commit-msg"
+echo "Installed pre-commit hook to .git/hooks/pre-commit"

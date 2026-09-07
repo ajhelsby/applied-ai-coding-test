@@ -32,7 +32,6 @@ jobs:
         with:
           python-version: 3.11
 
-
   deploy-production-api:
     runs-on: ubuntu-latest
     needs: build-docker-image
@@ -43,4 +42,3 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-

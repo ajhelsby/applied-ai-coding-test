@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if command -v uv >/dev/null 2>&1; then
+  cd "$REPO_ROOT"
+  exec uv run pre-commit run --all-files
+fi
+
+if command -v pre-commit >/dev/null 2>&1; then
+  cd "$REPO_ROOT"
+  exec pre-commit run --all-files
+fi
+
+echo "❌ pre-commit is not installed (and uv is unavailable)." >&2
+echo "Install dependencies with: pip install uv && uv sync" >&2
+exit 1
