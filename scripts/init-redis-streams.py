@@ -1,6 +1,6 @@
 import os
 
-import redis  # type: ignore[import-untyped]
+import redis
 
 TASKS_STREAM = "workflow.tasks"
 EVENTS_STREAM = "workflow.events"

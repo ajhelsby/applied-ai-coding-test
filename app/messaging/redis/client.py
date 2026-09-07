@@ -1,11 +1,11 @@
 import os
 from typing import Final
 
-import redis  # type: ignore[import-untyped]
+import redis
 from redis import Redis
 from redis import asyncio as aioredis
-from redis.backoff import ExponentialBackoff  # type: ignore[import-untyped]
-from redis.retry import Retry  # type: ignore[import-untyped]
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 _REDIS_URL_ENV: Final[str] = "REDIS_URL"
 _redis_client: Redis | None = None

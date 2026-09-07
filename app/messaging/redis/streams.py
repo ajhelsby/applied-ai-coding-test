@@ -1,6 +1,6 @@
 from typing import Final
 
-from redis import asyncio as aioredis  # type: ignore[import-untyped]
+from redis import asyncio as aioredis
 
 from app.messaging.redis.client import get_async_redis_client
 

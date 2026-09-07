@@ -1,5 +1,11 @@
 # applied-ai-coding-test
 
+## Requirements
+
+- Python 3.12
+- Docker and Docker Compose
+- Node.js (required for running all `pre-commit` hooks, including JS-based hooks)
+
 ## Docker runtime
 
 1. Copy Docker environment defaults:
