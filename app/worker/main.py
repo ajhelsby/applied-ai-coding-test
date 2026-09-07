@@ -22,3 +22,7 @@ def main() -> None:
         time.sleep(1)
 
     print("worker stopped", flush=True)
+
+
+if __name__ == "__main__":
+    main()

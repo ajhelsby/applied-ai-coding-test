@@ -14,6 +14,7 @@ COPY . .
 RUN chown -R app:app /app
 
 USER app
+ENV HOME=/tmp
 
 EXPOSE 8000
 
@@ -27,7 +28,7 @@ CMD ["python", "-m", "app.worker.main"]
 
 FROM base AS migrate
 RUN pip install --no-cache-dir .
-CMD ["alembic", "upgrade", "head"]
+CMD ["python", "-m", "alembic", "upgrade", "head"]
 
 FROM base AS redis-init
 RUN pip install --no-cache-dir .
