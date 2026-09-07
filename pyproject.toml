@@ -54,6 +54,9 @@ line_length = 100
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+markers = [
+  "integration: requires a running PostgreSQL instance with migrations applied",
+]
 
 [tool.coverage.run]
 branch = true

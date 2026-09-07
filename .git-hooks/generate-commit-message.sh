@@ -225,7 +225,8 @@ Rules:
 - Keep it under 100 characters.
 """
 
-user_prompt = f"""Generate a concise commit description for this change. Max 80 characters.
+max_subject_chars = 100
+user_prompt = f"""Generate a concise commit description for this change. Max {max_subject_chars} characters.
 
 Branch description:
 {branch_description or "(none)"}
@@ -334,7 +335,9 @@ fi
 # ------------------------------------------------------------
 
 if (( ${#AI_MESSAGE} > MAX_SUBJECT_CHARS )); then
-    fail "AI generated a description longer than ${MAX_SUBJECT_CHARS} characters."
+    AI_MESSAGE="${AI_MESSAGE:0:$MAX_SUBJECT_CHARS}"
+    AI_MESSAGE=$(echo "$AI_MESSAGE" | sed 's/[[:space:]]\+$//')
+    AI_MESSAGE="${AI_MESSAGE%.}"
 fi
 
 # ------------------------------------------------------------
