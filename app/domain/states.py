@@ -8,9 +8,8 @@ class WorkflowExecutionStatus(StrEnum):
 
     PENDING = "pending"
     RUNNING = "running"
-    SUCCEEDED = "succeeded"
+    COMPLETED = "completed"
     FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 class NodeExecutionStatus(StrEnum):
@@ -19,6 +18,6 @@ class NodeExecutionStatus(StrEnum):
     PENDING = "pending"
     READY = "ready"
     RUNNING = "running"
-    SUCCEEDED = "succeeded"
+    COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
