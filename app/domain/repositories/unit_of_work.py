@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
 from app.domain.repositories.node_execution_repository import NodeExecutionRepository
@@ -17,5 +17,5 @@ class UnitOfWork(Protocol):
     workflow_executions: WorkflowExecutionRepository
     node_executions: NodeExecutionRepository
 
-    def transaction(self) -> AsyncIterator[UnitOfWork]:
+    def transaction(self) -> AbstractAsyncContextManager[UnitOfWork]:
         """Provide a managed transactional scope."""
