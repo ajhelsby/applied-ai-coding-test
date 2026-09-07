@@ -19,12 +19,16 @@ EXPOSE 8000
 
 FROM base AS api
 RUN pip install --no-cache-dir .
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 FROM base AS worker
 RUN pip install --no-cache-dir .
-CMD ["python", "-m", "app.worker"]
+CMD ["python", "-m", "app.worker.main"]
 
 FROM base AS migrate
 RUN pip install --no-cache-dir .
 CMD ["alembic", "upgrade", "head"]
+
+FROM base AS redis-init
+RUN pip install --no-cache-dir .
+CMD ["python", "scripts/init-redis-streams.py"]
