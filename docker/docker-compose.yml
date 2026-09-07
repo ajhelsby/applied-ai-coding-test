@@ -3,6 +3,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: api
     restart: unless-stopped
     command:
       [
@@ -22,8 +23,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -31,6 +32,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: worker
     restart: unless-stopped
     command: ["python", "-m", "app.orchestrator"]
     environment:
@@ -38,8 +40,8 @@ services:
       REDIS_URL: ${REDIS_URL}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -47,6 +49,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: worker
     restart: unless-stopped
     command: ["python", "-m", "app.worker"]
     environment:
@@ -54,9 +57,21 @@ services:
       REDIS_URL: ${REDIS_URL}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
         condition: service_healthy
 
   postgres:

@@ -32,3 +32,7 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml down
 ```
 
 PostgreSQL data is persisted in `docker/db/postgres_data`.
+
+## Architecture decision: Docker image targets
+
+We use a single multi-stage Dockerfile with per-service build targets (`api`, `worker`, `migrate`) instead of multiple Dockerfiles. This keeps service images role-specific and slim while avoiding duplicated Dockerfile maintenance.
