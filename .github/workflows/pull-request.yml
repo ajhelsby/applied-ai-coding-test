@@ -11,11 +11,11 @@ jobs:
 
     services:
       postgresql:
-        image: mysql:8.0.32
+        image: postgresql
         env:
-          MYSQL_ROOT_PASSWORD: mysql_password123
-          MYSQL_DATABASE: hoxtonmix
-        ports: ["3306:3306"]
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: applied_ai_db
+        ports: ["5432:5432"]
 
     steps:
       - name: Cloning repo

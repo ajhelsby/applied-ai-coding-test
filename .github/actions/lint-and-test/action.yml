@@ -7,10 +7,10 @@ runs:
   steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
+    - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
-        python-version: 3.11
+        python-version: 3.12
 
     - name: Setup pre-commit cache
       if: ${{ inputs.namespace_runners == 'true' }}
@@ -29,10 +29,6 @@ runs:
     - name: Run Linters
       run: |
         uv run pre-commit run --all-files
-      shell: bash
-
-    - name: Collect static files
-      run: uv run python manage.py collectstatic --noinput
       shell: bash
 
 #    - name: Test with pytest
