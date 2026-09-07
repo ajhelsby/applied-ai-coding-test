@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.state_machine import validate_node_transition, validate_workflow_transition
 from app.domain.states import NodeExecutionStatus, WorkflowExecutionStatus
 
 
@@ -24,6 +25,12 @@ class WorkflowExecution(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
+    def transition_to(self, target_status: WorkflowExecutionStatus) -> WorkflowExecution:
+        """Return a new workflow execution with a validated status transition."""
+
+        validate_workflow_transition(self.status, target_status)
+        return self.model_copy(update={"status": target_status})
+
 
 class NodeExecution(BaseModel):
     """Execution record for an individual workflow node."""
@@ -39,3 +46,9 @@ class NodeExecution(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
+
+    def transition_to(self, target_status: NodeExecutionStatus) -> NodeExecution:
+        """Return a new node execution with a validated status transition."""
+
+        validate_node_transition(self.status, target_status)
+        return self.model_copy(update={"status": target_status})
