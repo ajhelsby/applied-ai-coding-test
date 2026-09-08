@@ -19,6 +19,17 @@
 3. API docs:
    - http://localhost:8000/docs
 
+## Workflow execution endpoints
+
+- `GET /workflows/{execution_id}` returns current persisted execution and node statuses.
+- `GET /workflows/{execution_id}/results` returns final aggregated node outputs when execution has completed successfully.
+  - Assumption/invariant: if any node execution fails, the workflow execution is marked `FAILED`; therefore `COMPLETED` represents successful completion.
+  - Defensive behavior: if persisted state is inconsistent (execution is `COMPLETED` but any node is `FAILED`), the endpoint returns `results: null` with an inconsistency message.
+  - `404` if the execution does not exist.
+  - `200` with `results: null` for `PENDING` or `RUNNING` executions.
+  - `200` with `results: null` for `FAILED` executions.
+  - `200` with `results` for `COMPLETED` executions, with each result item preserving node-level provenance (`node_id`) and output payload (`output_data`).
+
 ### Horizontal scaling example
 
 ```bash

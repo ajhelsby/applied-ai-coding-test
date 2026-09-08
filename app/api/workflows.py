@@ -13,7 +13,9 @@ from app.api.responses import (
     NodeExecutionStatusResponseItem,
     PersistenceErrorResponse,
     ValidationErrorResponse,
+    WorkflowExecutionResultsResponsePayload,
     WorkflowExecutionStatusResponsePayload,
+    WorkflowResultNodeResponseItem,
     WorkflowSubmissionResponse,
     WorkflowTriggerResponse,
 )
@@ -26,6 +28,7 @@ from app.domain.errors.validation import InvalidWorkflowDefinitionError
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.infrastructure.persistence.providers import get_unit_of_work
 from app.services.workflow_definition_service import WorkflowDefinitionService
+from app.services.workflow_execution_results_service import WorkflowExecutionResultsService
 from app.services.workflow_execution_status_service import WorkflowExecutionStatusService
 from app.services.workflow_trigger_service import WorkflowTriggerService
 
@@ -71,6 +74,51 @@ async def submit_workflow(
         execution_id=submission.execution_id,
         name=submission.name,
         created_at=submission.created_at,
+    )
+
+
+@router.get(
+    "/workflows/{execution_id}/results",
+    response_model=WorkflowExecutionResultsResponsePayload,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Workflow execution not found."}},
+)
+async def get_workflow_execution_results(
+    execution_id: UUID,
+    unit_of_work: UnitOfWork = unit_of_work_dependency,
+) -> WorkflowExecutionResultsResponsePayload:
+    """Retrieve final aggregated node outputs for a workflow execution."""
+
+    result = await WorkflowExecutionResultsService().get(execution_id, unit_of_work)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow execution not found.",
+        )
+
+    execution = result.execution
+    return WorkflowExecutionResultsResponsePayload(
+        execution_id=execution.execution_id,
+        workflow_id=execution.workflow_id,
+        status=execution.status,
+        created_at=execution.created_at,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+        message=result.message,
+        results=None
+        if result.results is None
+        else [
+            WorkflowResultNodeResponseItem(
+                node_id=node_result.node_id,
+                status=node_result.status,
+                output_data=node_result.output_data,
+                error_message=node_result.error_message,
+                error_type=node_result.error_type,
+                created_at=node_result.created_at,
+                started_at=node_result.started_at,
+                completed_at=node_result.completed_at,
+            )
+            for node_result in result.results
+        ],
     )
 
 
