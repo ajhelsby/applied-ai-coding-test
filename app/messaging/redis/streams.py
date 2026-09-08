@@ -8,6 +8,7 @@ from app.messaging.redis.client import get_async_redis_client
 
 WORKFLOW_TASKS_STREAM: Final[str] = "workflow.tasks"
 WORKFLOW_EVENTS_STREAM: Final[str] = "workflow.events"
+WORKFLOW_TASK_COMPLETIONS_STREAM: Final[str] = "workflow.task-completions"
 
 
 async def publish(

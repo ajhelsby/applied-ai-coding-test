@@ -4,8 +4,10 @@ import redis
 
 TASKS_STREAM = "workflow.tasks"
 EVENTS_STREAM = "workflow.events"
+TASK_COMPLETIONS_STREAM = "workflow.task-completions"
 WORKER_GROUP = "workers"
 ORCHESTRATOR_GROUP = "orchestrator"
+ORCHESTRATOR_COMPLETIONS_GROUP = "orchestrator-completions"
 
 
 def ensure_group(client: redis.Redis, stream: str, group: str) -> None:
@@ -29,6 +31,7 @@ def main() -> None:
         client.ping()
         ensure_group(client, TASKS_STREAM, WORKER_GROUP)
         ensure_group(client, EVENTS_STREAM, ORCHESTRATOR_GROUP)
+        ensure_group(client, TASK_COMPLETIONS_STREAM, ORCHESTRATOR_COMPLETIONS_GROUP)
     finally:
         client.close()
 
