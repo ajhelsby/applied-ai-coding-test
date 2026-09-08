@@ -5,13 +5,15 @@ from __future__ import annotations
 from dataclasses import asdict
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from app.api.requests import WorkflowSubmissionRequest, WorkflowTriggerRequest
 from app.api.responses import (
+    NodeExecutionStatusResponseItem,
     PersistenceErrorResponse,
     ValidationErrorResponse,
+    WorkflowExecutionStatusResponsePayload,
     WorkflowSubmissionResponse,
     WorkflowTriggerResponse,
 )
@@ -24,6 +26,7 @@ from app.domain.errors.validation import InvalidWorkflowDefinitionError
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.infrastructure.persistence.providers import get_unit_of_work
 from app.services.workflow_definition_service import WorkflowDefinitionService
+from app.services.workflow_execution_status_service import WorkflowExecutionStatusService
 from app.services.workflow_trigger_service import WorkflowTriggerService
 
 router = APIRouter()
@@ -68,6 +71,45 @@ async def submit_workflow(
         execution_id=submission.execution_id,
         name=submission.name,
         created_at=submission.created_at,
+    )
+
+
+@router.get(
+    "/workflows/{execution_id}",
+    response_model=WorkflowExecutionStatusResponsePayload,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Workflow execution not found."}},
+)
+async def get_workflow_execution(
+    execution_id: UUID,
+    unit_of_work: UnitOfWork = unit_of_work_dependency,
+) -> WorkflowExecutionStatusResponsePayload:
+    """Retrieve the current persisted status of a workflow execution."""
+
+    result = await WorkflowExecutionStatusService().get(execution_id, unit_of_work)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow execution not found.",
+        )
+
+    execution = result.execution
+    return WorkflowExecutionStatusResponsePayload(
+        execution_id=execution.execution_id,
+        workflow_id=execution.workflow_id,
+        status=execution.status,
+        created_at=execution.created_at,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+        nodes=[
+            NodeExecutionStatusResponseItem(
+                node_id=node_execution.node_id,
+                status=node_execution.status,
+                created_at=node_execution.created_at,
+                started_at=node_execution.started_at,
+                completed_at=node_execution.completed_at,
+            )
+            for node_execution in result.node_executions
+        ],
     )
 
 

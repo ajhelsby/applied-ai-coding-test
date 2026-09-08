@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
-from app.domain.state.states import WorkflowExecutionStatus
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
+
+
+def _serialize_status(status: StrEnum) -> str:
+    """Return persisted status values in their documented API form."""
+
+    return status.value.upper()
 
 
 class WorkflowSubmissionResponse(BaseModel):
@@ -42,6 +49,40 @@ class PersistenceErrorResponse(BaseModel):
 
     error_code: str
     message: str
+
+
+class NodeExecutionStatusResponseItem(BaseModel):
+    """Node execution status payload item."""
+
+    node_id: str
+    status: NodeExecutionStatus
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+
+    @field_serializer("status")
+    def serialize_status(self, status: NodeExecutionStatus) -> str:
+        """Return API status values in their documented uppercase form."""
+
+        return _serialize_status(status)
+
+
+class WorkflowExecutionStatusResponsePayload(BaseModel):
+    """Workflow execution status response payload."""
+
+    execution_id: UUID
+    workflow_id: UUID
+    status: WorkflowExecutionStatus
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    nodes: list[NodeExecutionStatusResponseItem]
+
+    @field_serializer("status")
+    def serialize_status(self, status: WorkflowExecutionStatus) -> str:
+        """Return API status values in their documented uppercase form."""
+
+        return _serialize_status(status)
 
 
 class WorkflowTriggerResponse(BaseModel):
