@@ -13,7 +13,9 @@ from app.api.responses import (
     NodeExecutionStatusResponseItem,
     PersistenceErrorResponse,
     ValidationErrorResponse,
+    WorkflowExecutionResultsResponsePayload,
     WorkflowExecutionStatusResponsePayload,
+    WorkflowResultNodeResponseItem,
     WorkflowSubmissionResponse,
     WorkflowTriggerResponse,
 )
@@ -24,6 +26,7 @@ from app.domain.errors.transitions import (
 )
 from app.domain.errors.validation import InvalidWorkflowDefinitionError
 from app.domain.repositories.unit_of_work import UnitOfWork
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.infrastructure.persistence.providers import get_unit_of_work
 from app.services.workflow_definition_service import WorkflowDefinitionService
 from app.services.workflow_execution_status_service import WorkflowExecutionStatusService
@@ -71,6 +74,106 @@ async def submit_workflow(
         execution_id=submission.execution_id,
         name=submission.name,
         created_at=submission.created_at,
+    )
+
+
+@router.get(
+    "/workflows/{execution_id}/results",
+    response_model=WorkflowExecutionResultsResponsePayload,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Workflow execution not found."}},
+)
+async def get_workflow_execution_results(
+    execution_id: UUID,
+    unit_of_work: UnitOfWork = unit_of_work_dependency,
+) -> WorkflowExecutionResultsResponsePayload:
+    """Retrieve final aggregated node outputs for a workflow execution.
+
+    Invariant: if any node execution fails, the workflow execution status is FAILED.
+    Therefore, COMPLETED is treated as successful completion for final results.
+    A defensive guard still checks for inconsistent persisted state.
+    """
+
+    result = await WorkflowExecutionStatusService().get(execution_id, unit_of_work)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow execution not found.",
+        )
+
+    execution = result.execution
+    if execution.status is WorkflowExecutionStatus.PENDING:
+        return WorkflowExecutionResultsResponsePayload(
+            execution_id=execution.execution_id,
+            workflow_id=execution.workflow_id,
+            status=execution.status,
+            created_at=execution.created_at,
+            started_at=execution.started_at,
+            completed_at=execution.completed_at,
+            message="Workflow execution is pending. Results are not available yet.",
+            results=None,
+        )
+    if execution.status is WorkflowExecutionStatus.RUNNING:
+        return WorkflowExecutionResultsResponsePayload(
+            execution_id=execution.execution_id,
+            workflow_id=execution.workflow_id,
+            status=execution.status,
+            created_at=execution.created_at,
+            started_at=execution.started_at,
+            completed_at=execution.completed_at,
+            message="Workflow execution is running. Results are not available yet.",
+            results=None,
+        )
+    if execution.status is WorkflowExecutionStatus.FAILED:
+        return WorkflowExecutionResultsResponsePayload(
+            execution_id=execution.execution_id,
+            workflow_id=execution.workflow_id,
+            status=execution.status,
+            created_at=execution.created_at,
+            started_at=execution.started_at,
+            completed_at=execution.completed_at,
+            message="Workflow execution failed. Final results are not available.",
+            results=None,
+        )
+    if any(
+        node_execution.status is NodeExecutionStatus.FAILED
+        for node_execution in result.node_executions
+    ):
+        return WorkflowExecutionResultsResponsePayload(
+            execution_id=execution.execution_id,
+            workflow_id=execution.workflow_id,
+            status=execution.status,
+            created_at=execution.created_at,
+            started_at=execution.started_at,
+            completed_at=execution.completed_at,
+            message=(
+                "Workflow execution state is inconsistent: completed execution contains "
+                "failed node executions. Final results are not available."
+            ),
+            results=None,
+        )
+
+    return WorkflowExecutionResultsResponsePayload(
+        execution_id=execution.execution_id,
+        workflow_id=execution.workflow_id,
+        status=execution.status,
+        created_at=execution.created_at,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+        message=None,
+        results=[
+            WorkflowResultNodeResponseItem(
+                node_id=node_execution.node_id,
+                status=node_execution.status,
+                output_data=node_execution.output_data,
+                error_message=node_execution.error_message,
+                error_type=node_execution.error_type,
+                created_at=node_execution.created_at,
+                started_at=node_execution.started_at,
+                completed_at=node_execution.completed_at,
+            )
+            for node_execution in result.node_executions
+            if node_execution.status is NodeExecutionStatus.COMPLETED
+        ],
     )
 
 

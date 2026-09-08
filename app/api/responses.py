@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_serializer
@@ -90,3 +91,41 @@ class WorkflowTriggerResponse(BaseModel):
 
     execution_id: UUID
     status: WorkflowExecutionStatus
+
+
+class WorkflowResultNodeResponseItem(BaseModel):
+    """Node-level result payload item for completed workflow outputs."""
+
+    node_id: str
+    status: NodeExecutionStatus
+    output_data: dict[str, Any]
+    error_message: str | None
+    error_type: str | None
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+
+    @field_serializer("status")
+    def serialize_status(self, status: NodeExecutionStatus) -> str:
+        """Return API status values in their documented uppercase form."""
+
+        return _serialize_status(status)
+
+
+class WorkflowExecutionResultsResponsePayload(BaseModel):
+    """Workflow execution results response payload."""
+
+    execution_id: UUID
+    workflow_id: UUID
+    status: WorkflowExecutionStatus
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    message: str | None = None
+    results: list[WorkflowResultNodeResponseItem] | None = None
+
+    @field_serializer("status")
+    def serialize_status(self, status: WorkflowExecutionStatus) -> str:
+        """Return API status values in their documented uppercase form."""
+
+        return _serialize_status(status)
