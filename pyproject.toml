@@ -22,7 +22,23 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = []
-packages = ["app", "app.api", "app.db", "app.domain", "app.messaging", "app.messaging.redis", "app.orchestrator", "app.worker"]
+packages = [
+  "app",
+  "app.api",
+  "app.db",
+  "app.domain",
+  "app.domain.errors",
+  "app.domain.models",
+  "app.domain.repositories",
+  "app.domain.state",
+  "app.domain.validation",
+  "app.domain.validation.rules",
+  "app.messaging",
+  "app.messaging.redis",
+  "app.orchestrator",
+  "app.services",
+  "app.worker",
+]
 
 [tool.uv]
 dev-dependencies = [

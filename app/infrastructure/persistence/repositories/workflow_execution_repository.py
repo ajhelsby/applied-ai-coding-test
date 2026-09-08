@@ -8,9 +8,9 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.execution import WorkflowExecution
+from app.domain.models.execution import WorkflowExecution
 from app.domain.repositories.workflow_execution_repository import WorkflowExecutionRepository
-from app.domain.states import WorkflowExecutionStatus
+from app.domain.state.states import WorkflowExecutionStatus
 from app.infrastructure.persistence.models.workflow_execution import WorkflowExecutionRecord
 
 

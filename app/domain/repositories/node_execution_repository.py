@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.execution import NodeExecution
-from app.domain.states import NodeExecutionStatus
+from app.domain.models.execution import NodeExecution
+from app.domain.state.states import NodeExecutionStatus
 
 
 class NodeExecutionRepository(Protocol):

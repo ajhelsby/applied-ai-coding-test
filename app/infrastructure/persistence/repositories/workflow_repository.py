@@ -7,8 +7,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.models.workflow import Workflow
 from app.domain.repositories.workflow_repository import WorkflowRepository
-from app.domain.workflow import Workflow
 from app.infrastructure.persistence.models.workflow import WorkflowRecord
 
 
@@ -22,7 +22,7 @@ class SqlAlchemyWorkflowRepository(WorkflowRepository):
         record = WorkflowRecord(
             workflow_id=workflow.workflow_id,
             name=workflow.name,
-            dag_definition={"nodes": [node.model_dump(mode="json") for node in workflow.nodes]},
+            dag_definition=workflow.dag.model_dump(mode="json"),
             created_at=workflow.created_at,
         )
         self._session.add(record)
@@ -41,7 +41,7 @@ class SqlAlchemyWorkflowRepository(WorkflowRepository):
             {
                 "workflow_id": record.workflow_id,
                 "name": record.name,
-                "nodes": nodes_payload,
+                "dag": {"nodes": nodes_payload},
                 "created_at": record.created_at,
             }
         )

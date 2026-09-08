@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.workflow import Workflow
+from app.domain.models.workflow import Workflow
 
 
 class WorkflowRepository(Protocol):

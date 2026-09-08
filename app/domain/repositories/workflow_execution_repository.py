@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.execution import WorkflowExecution
-from app.domain.states import WorkflowExecutionStatus
+from app.domain.models.execution import WorkflowExecution
+from app.domain.state.states import WorkflowExecutionStatus
 
 
 class WorkflowExecutionRepository(Protocol):

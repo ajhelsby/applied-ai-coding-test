@@ -10,10 +10,10 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.domain.execution import NodeExecution, WorkflowExecution
-from app.domain.node import WorkflowNode
-from app.domain.states import NodeExecutionStatus, WorkflowExecutionStatus
-from app.domain.workflow import Workflow
+from app.domain.models.execution import NodeExecution, WorkflowExecution
+from app.domain.models.node import WorkflowNode
+from app.domain.models.workflow import Workflow, WorkflowDag
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -40,13 +40,15 @@ def test_persists_and_retrieves_workflow_execution_and_nodes(
     async def scenario() -> None:
         workflow = Workflow(
             name="document-processing",
-            nodes=[
-                WorkflowNode(
-                    node_id="extract",
-                    handler="extract_document",
-                    config={"format": "pdf", "pages": [1, 2]},
-                )
-            ],
+            dag=WorkflowDag(
+                nodes=[
+                    WorkflowNode(
+                        id="extract",
+                        handler="extract_document",
+                        config={"format": "pdf", "pages": [1, 2]},
+                    )
+                ]
+            ),
         )
         execution = WorkflowExecution(
             workflow_id=workflow.workflow_id,

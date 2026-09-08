@@ -23,6 +23,13 @@ applyTo: "**/*"
 - If behavior cannot be reached through real endpoint execution, remove or refactor that code instead of adding synthetic tests for it.
 - Keep tests deterministic, isolated, and fast.
 
+### Exception: domain validation rule testing
+
+- For extensible domain validation frameworks (for example rule-based workflow validation), add direct rule-level unit tests for internal/domain modules.
+- Rule tests should live under `tests/unit/app/domain/validation/` (for example `rules/` and validator/provider composition tests).
+- Each validation rule should be independently testable and include both valid and invalid scenarios with clear assertions on structured domain errors.
+- Keep top-level entry-point/controller tests for externally observable behavior, and use rule-level tests to verify domain validation correctness in isolation.
+
 ## Persistence expectations
 
 - Unit tests may validate PostgreSQL persistence behavior that is directly observable via endpoint behavior.

@@ -14,7 +14,7 @@ class WorkflowNode(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    node_id: str = Field(min_length=1)
+    id: str = Field(min_length=1)
     handler: str = Field(min_length=1)
     dependencies: list[str] = Field(default_factory=list)
     config: dict[str, Any] = Field(default_factory=dict)

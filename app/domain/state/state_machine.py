@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from app.domain.exceptions import InvalidNodeTransitionError, InvalidWorkflowTransitionError
-from app.domain.states import NodeExecutionStatus, WorkflowExecutionStatus
+from app.domain.errors.transitions import (
+    InvalidNodeTransitionError,
+    InvalidWorkflowTransitionError,
+)
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 
 WORKFLOW_TRANSITIONS: dict[WorkflowExecutionStatus, set[WorkflowExecutionStatus]] = {
     WorkflowExecutionStatus.PENDING: {
