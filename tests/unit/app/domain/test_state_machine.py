@@ -54,6 +54,7 @@ def test_workflow_invalid_transitions(
         (NodeExecutionStatus.PENDING, NodeExecutionStatus.SKIPPED),
         (NodeExecutionStatus.READY, NodeExecutionStatus.RUNNING),
         (NodeExecutionStatus.READY, NodeExecutionStatus.SKIPPED),
+        (NodeExecutionStatus.RUNNING, NodeExecutionStatus.READY),
         (NodeExecutionStatus.RUNNING, NodeExecutionStatus.COMPLETED),
         (NodeExecutionStatus.RUNNING, NodeExecutionStatus.FAILED),
     ],

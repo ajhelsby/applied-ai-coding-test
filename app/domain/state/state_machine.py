@@ -30,6 +30,7 @@ NODE_TRANSITIONS: dict[NodeExecutionStatus, set[NodeExecutionStatus]] = {
         NodeExecutionStatus.SKIPPED,
     },
     NodeExecutionStatus.RUNNING: {
+        NodeExecutionStatus.READY,
         NodeExecutionStatus.COMPLETED,
         NodeExecutionStatus.FAILED,
     },
