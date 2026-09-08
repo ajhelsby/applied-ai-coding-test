@@ -2,8 +2,7 @@
 
 from app.domain.validation.rules.cycles import CycleDetectionRule
 from app.domain.validation.rules.dependencies import (
-    DependencyReferencesRule,
-    SelfDependencyRule,
+    DependencyReferenceRule,
 )
 from app.domain.validation.rules.fields import (
     RequiredNodeFieldsRule,
@@ -17,12 +16,11 @@ from app.domain.validation.rules.node_ids import NodeIdValidityRule, UniqueNodeI
 
 __all__ = [
     "CycleDetectionRule",
-    "DependencyReferencesRule",
+    "DependencyReferenceRule",
     "HandlerDefinitionRule",
     "NodeConfigurationRule",
     "NodeIdValidityRule",
     "RequiredNodeFieldsRule",
     "RequiredWorkflowFieldsRule",
-    "SelfDependencyRule",
     "UniqueNodeIdsRule",
 ]

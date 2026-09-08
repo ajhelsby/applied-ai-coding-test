@@ -51,7 +51,7 @@ def test_collect_rules_preserves_provider_and_rule_order() -> None:
 
 
 def test_default_provider_registers_all_initial_rules() -> None:
-    assert len(DefaultWorkflowRuleProvider().get_rules()) == 9
+    assert len(DefaultWorkflowRuleProvider().get_rules()) == 8
 
 
 def test_default_validator_accepts_valid_linear_dag() -> None:
