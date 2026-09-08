@@ -27,6 +27,7 @@ packages = [
   "app.api",
   "app.db",
   "app.domain",
+  "app.domain.dag",
   "app.domain.errors",
   "app.domain.models",
   "app.domain.repositories",

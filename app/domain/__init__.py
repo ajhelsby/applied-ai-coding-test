@@ -1,5 +1,6 @@
 """Shared domain models and enums for workflow services."""
 
+from app.domain.dag import DAG, DAGNode
 from app.domain.errors.transitions import (
     InvalidNodeTransitionError,
     InvalidWorkflowTransitionError,
@@ -37,6 +38,8 @@ __all__ = [
     "NodeExecutionStatus",
     "NODE_TRANSITIONS",
     "NodeReference",
+    "DAG",
+    "DAGNode",
     "InvalidNodeTransitionError",
     "InvalidWorkflowTransitionError",
     "InvalidWorkflowDefinitionError",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from app.domain.dag import DAG
 from app.domain.errors.validation import InvalidWorkflowDefinitionError
 from app.domain.models.execution import WorkflowExecution
 from app.domain.models.workflow import Workflow
@@ -36,6 +37,11 @@ class WorkflowDefinitionService:
         if errors:
             raise InvalidWorkflowDefinitionError(errors)
         return Workflow.model_validate(definition)
+
+    def build_dag(self, definition: Mapping[str, Any]) -> DAG:
+        """Validate a workflow definition and construct its traversal graph."""
+
+        return DAG.from_workflow(self.accept(definition))
 
     async def submit(
         self,

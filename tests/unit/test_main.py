@@ -7,6 +7,7 @@ from app.api.main import app
 from app.api.workflows import get_unit_of_work
 from app.domain.models.execution import WorkflowExecution
 from app.domain.models.workflow import Workflow
+from app.services.workflow_definition_service import WorkflowDefinitionService
 
 
 class InMemoryWorkflowRepository:
@@ -86,6 +87,23 @@ def test_submit_workflow_returns_execution_id_for_valid_definition() -> None:
     assert UUID(response.json()["execution_id"])
     assert len(unit_of_work.workflows.workflows) == 1
     assert len(unit_of_work.workflow_executions.executions) == 1
+
+
+def test_build_dag_returns_validated_traversal_graph() -> None:
+    dag = WorkflowDefinitionService().build_dag(
+        {
+            "name": "workflow",
+            "dag": {
+                "nodes": [
+                    {"id": "input", "handler": "input", "dependencies": []},
+                    {"id": "output", "handler": "output", "dependencies": ["input"]},
+                ]
+            },
+        }
+    )
+
+    assert tuple(node.node_id for node in dag.get_roots()) == ("input",)
+    assert tuple(node.node_id for node in dag.get_terminals()) == ("output",)
 
 
 def test_submit_workflow_returns_all_validation_errors() -> None:
