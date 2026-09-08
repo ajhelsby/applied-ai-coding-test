@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
+from fastapi.responses import JSONResponse
 
+from app.api.requests import WorkflowSubmissionRequest
+from app.api.responses import (
+    PersistenceErrorResponse,
+    ValidationErrorResponse,
+    WorkflowSubmissionResponse,
+)
+from app.domain.errors.persistence import WorkflowPersistenceError
 from app.domain.errors.validation import InvalidWorkflowDefinitionError
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.infrastructure.persistence.providers import get_unit_of_work
@@ -16,18 +23,42 @@ router = APIRouter()
 unit_of_work_dependency = Depends(get_unit_of_work)
 
 
-@router.post("/workflow", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/workflow",
+    status_code=status.HTTP_201_CREATED,
+    response_model=WorkflowSubmissionResponse,
+    responses={
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ValidationErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": PersistenceErrorResponse},
+    },
+)
 async def submit_workflow(
-    definition: dict[str, Any],
+    definition: WorkflowSubmissionRequest,
     unit_of_work: UnitOfWork = unit_of_work_dependency,
-) -> dict[str, str]:
-    """Validate, persist, and create a pending execution for a workflow."""
+) -> WorkflowSubmissionResponse | JSONResponse:
+    """Validate and persist a workflow definition."""
 
     try:
-        execution = await WorkflowDefinitionService().submit(definition, unit_of_work)
+        submission = await WorkflowDefinitionService().submit(definition.model_dump(), unit_of_work)
     except InvalidWorkflowDefinitionError as error:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={"errors": [asdict(item) for item in error.errors]},
-        ) from error
-    return {"execution_id": str(execution.execution_id)}
+            content={
+                "error_code": "workflow_validation_failed",
+                "message": "Workflow definition failed validation.",
+                "errors": [asdict(item) for item in error.errors],
+            },
+        )
+    except WorkflowPersistenceError:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "error_code": "workflow_persistence_failed",
+                "message": "Workflow could not be persisted. Please try again later.",
+            },
+        )
+    return WorkflowSubmissionResponse(
+        execution_id=submission.execution_id,
+        name=submission.name,
+        created_at=submission.created_at,
+    )

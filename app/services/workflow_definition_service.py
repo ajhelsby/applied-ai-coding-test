@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from app.domain.dag import DAG
 from app.domain.errors.validation import InvalidWorkflowDefinitionError
-from app.domain.models.execution import WorkflowExecution
 from app.domain.models.workflow import Workflow
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.validation import (
@@ -16,6 +19,17 @@ from app.domain.validation import (
     WorkflowValidator,
     collect_rules,
 )
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowSubmission:
+    """Workflow metadata returned after a successful submission."""
+
+    execution_id: UUID
+    name: str
+    created_at: datetime
 
 
 class WorkflowDefinitionService:
@@ -35,6 +49,9 @@ class WorkflowDefinitionService:
 
         errors = self._validator.validate(definition)
         if errors:
+            logger.warning(
+                "Workflow submission validation failed", extra={"error_count": len(errors)}
+            )
             raise InvalidWorkflowDefinitionError(errors)
         return Workflow.model_validate(definition)
 
@@ -47,12 +64,15 @@ class WorkflowDefinitionService:
         self,
         definition: Mapping[str, Any],
         unit_of_work: UnitOfWork,
-    ) -> WorkflowExecution:
-        """Accept a definition and create its pending workflow execution."""
+    ) -> WorkflowSubmission:
+        """Validate and persist a workflow definition without starting execution."""
 
         workflow = self.accept(definition)
-        execution = WorkflowExecution(workflow_id=workflow.workflow_id)
         async with unit_of_work.transaction() as transaction:
             await transaction.workflows.create_workflow(workflow)
-            await transaction.workflow_executions.create_execution(execution)
-        return execution
+        logger.info("Workflow submitted", extra={"workflow_id": str(workflow.workflow_id)})
+        return WorkflowSubmission(
+            execution_id=workflow.workflow_id,
+            name=workflow.name,
+            created_at=workflow.created_at,
+        )
