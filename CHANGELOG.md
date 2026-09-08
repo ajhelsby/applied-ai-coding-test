@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.3](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.2...v0.0.3) (2026-09-08)
+
+
+### Features
+
+* **#17:** Implement dependency-based node readiness evaluation and corresponding tests ([#64](https://github.com/ajhelsby/applied-ai-coding-test/issues/64)) ([a64f684](https://github.com/ajhelsby/applied-ai-coding-test/commit/a64f68456214b1230cca8c16b5ddebeef16913ca))
+* **#19:** Task completion event handling ([#66](https://github.com/ajhelsby/applied-ai-coding-test/issues/66)) ([eab3add](https://github.com/ajhelsby/applied-ai-coding-test/commit/eab3add6d8de3d59dfd869f8e19692dc321d21ad))
+* **#25:** Add detailed design documentation for worker message handling and recovery strategies ([#67](https://github.com/ajhelsby/applied-ai-coding-test/issues/67)) ([a88432c](https://github.com/ajhelsby/applied-ai-coding-test/commit/a88432ca5ee2a032b3de94d1f81e4f3171661098))
+
 ## [0.0.2](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.1...v0.0.2) (2026-09-08)
 
 
