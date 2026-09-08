@@ -224,6 +224,79 @@ def test_cycle_detection_rule_rejects_cycles() -> None:
     assert error.code == "cyclic_dependency"
     assert error.node_id is not None
     assert error.dependency_id is not None
+    assert error.meta["cycle_path"] == "input->output->get_user->input"
+
+
+def test_cycle_detection_rule_detects_direct_cycle_with_path() -> None:
+    workflow = {
+        "name": "direct-cycle",
+        "dag": {
+            "nodes": [
+                {"id": "A", "handler": "input", "dependencies": ["B"]},
+                {"id": "B", "handler": "output", "dependencies": ["A"]},
+            ]
+        },
+    }
+
+    errors = CycleDetectionRule().validate(workflow)
+
+    assert len(errors) == 1
+    assert errors[0].code == "cyclic_dependency"
+    assert errors[0].meta["cycle_path"] == "A->B->A"
+
+
+def test_cycle_detection_rule_detects_indirect_cycle_with_path() -> None:
+    workflow = {
+        "name": "indirect-cycle",
+        "dag": {
+            "nodes": [
+                {"id": "A", "handler": "input", "dependencies": ["B"]},
+                {"id": "B", "handler": "output", "dependencies": ["C"]},
+                {"id": "C", "handler": "output", "dependencies": ["A"]},
+            ]
+        },
+    }
+
+    errors = CycleDetectionRule().validate(workflow)
+
+    assert len(errors) == 1
+    assert errors[0].code == "cyclic_dependency"
+    assert errors[0].meta["cycle_path"] == "A->B->C->A"
+
+
+def test_cycle_detection_rule_handles_multiple_independent_branches() -> None:
+    workflow = {
+        "name": "independent-branches",
+        "dag": {
+            "nodes": [
+                {"id": "A", "handler": "input", "dependencies": []},
+                {"id": "B", "handler": "output", "dependencies": ["A"]},
+                {"id": "X", "handler": "input", "dependencies": ["Y"]},
+                {"id": "Y", "handler": "output", "dependencies": ["X"]},
+            ]
+        },
+    }
+
+    errors = CycleDetectionRule().validate(workflow)
+
+    assert len(errors) == 1
+    assert errors[0].code == "cyclic_dependency"
+    assert errors[0].meta["cycle_path"] == "X->Y->X"
+
+
+def test_cycle_detection_rule_allows_large_acyclic_graph() -> None:
+    node_count = 500
+    nodes = [
+        {
+            "id": f"n{i}",
+            "handler": "output" if i else "input",
+            "dependencies": [] if i == 0 else [f"n{i-1}"],
+        }
+        for i in range(node_count)
+    ]
+    workflow = {"name": "large-acyclic", "dag": {"nodes": nodes}}
+
+    assert CycleDetectionRule().validate(workflow) == []
 
 
 @pytest.mark.parametrize(
