@@ -26,9 +26,9 @@ from app.domain.errors.transitions import (
 )
 from app.domain.errors.validation import InvalidWorkflowDefinitionError
 from app.domain.repositories.unit_of_work import UnitOfWork
-from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.infrastructure.persistence.providers import get_unit_of_work
 from app.services.workflow_definition_service import WorkflowDefinitionService
+from app.services.workflow_execution_results_service import WorkflowExecutionResultsService
 from app.services.workflow_execution_status_service import WorkflowExecutionStatusService
 from app.services.workflow_trigger_service import WorkflowTriggerService
 
@@ -86,14 +86,9 @@ async def get_workflow_execution_results(
     execution_id: UUID,
     unit_of_work: UnitOfWork = unit_of_work_dependency,
 ) -> WorkflowExecutionResultsResponsePayload:
-    """Retrieve final aggregated node outputs for a workflow execution.
+    """Retrieve final aggregated node outputs for a workflow execution."""
 
-    Invariant: if any node execution fails, the workflow execution status is FAILED.
-    Therefore, COMPLETED is treated as successful completion for final results.
-    A defensive guard still checks for inconsistent persisted state.
-    """
-
-    result = await WorkflowExecutionStatusService().get(execution_id, unit_of_work)
+    result = await WorkflowExecutionResultsService().get(execution_id, unit_of_work)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -101,57 +96,6 @@ async def get_workflow_execution_results(
         )
 
     execution = result.execution
-    if execution.status is WorkflowExecutionStatus.PENDING:
-        return WorkflowExecutionResultsResponsePayload(
-            execution_id=execution.execution_id,
-            workflow_id=execution.workflow_id,
-            status=execution.status,
-            created_at=execution.created_at,
-            started_at=execution.started_at,
-            completed_at=execution.completed_at,
-            message="Workflow execution is pending. Results are not available yet.",
-            results=None,
-        )
-    if execution.status is WorkflowExecutionStatus.RUNNING:
-        return WorkflowExecutionResultsResponsePayload(
-            execution_id=execution.execution_id,
-            workflow_id=execution.workflow_id,
-            status=execution.status,
-            created_at=execution.created_at,
-            started_at=execution.started_at,
-            completed_at=execution.completed_at,
-            message="Workflow execution is running. Results are not available yet.",
-            results=None,
-        )
-    if execution.status is WorkflowExecutionStatus.FAILED:
-        return WorkflowExecutionResultsResponsePayload(
-            execution_id=execution.execution_id,
-            workflow_id=execution.workflow_id,
-            status=execution.status,
-            created_at=execution.created_at,
-            started_at=execution.started_at,
-            completed_at=execution.completed_at,
-            message="Workflow execution failed. Final results are not available.",
-            results=None,
-        )
-    if any(
-        node_execution.status is NodeExecutionStatus.FAILED
-        for node_execution in result.node_executions
-    ):
-        return WorkflowExecutionResultsResponsePayload(
-            execution_id=execution.execution_id,
-            workflow_id=execution.workflow_id,
-            status=execution.status,
-            created_at=execution.created_at,
-            started_at=execution.started_at,
-            completed_at=execution.completed_at,
-            message=(
-                "Workflow execution state is inconsistent: completed execution contains "
-                "failed node executions. Final results are not available."
-            ),
-            results=None,
-        )
-
     return WorkflowExecutionResultsResponsePayload(
         execution_id=execution.execution_id,
         workflow_id=execution.workflow_id,
@@ -159,20 +103,21 @@ async def get_workflow_execution_results(
         created_at=execution.created_at,
         started_at=execution.started_at,
         completed_at=execution.completed_at,
-        message=None,
-        results=[
+        message=result.message,
+        results=None
+        if result.results is None
+        else [
             WorkflowResultNodeResponseItem(
-                node_id=node_execution.node_id,
-                status=node_execution.status,
-                output_data=node_execution.output_data,
-                error_message=node_execution.error_message,
-                error_type=node_execution.error_type,
-                created_at=node_execution.created_at,
-                started_at=node_execution.started_at,
-                completed_at=node_execution.completed_at,
+                node_id=node_result.node_id,
+                status=node_result.status,
+                output_data=node_result.output_data,
+                error_message=node_result.error_message,
+                error_type=node_result.error_type,
+                created_at=node_result.created_at,
+                started_at=node_result.started_at,
+                completed_at=node_result.completed_at,
             )
-            for node_execution in result.node_executions
-            if node_execution.status is NodeExecutionStatus.COMPLETED
+            for node_result in result.results
         ],
     )
 
