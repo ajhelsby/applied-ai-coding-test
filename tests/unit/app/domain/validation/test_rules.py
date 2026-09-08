@@ -9,13 +9,12 @@ import pytest
 
 from app.domain.validation.rules import (
     CycleDetectionRule,
-    DependencyReferencesRule,
+    DependencyReferenceRule,
     HandlerDefinitionRule,
     NodeConfigurationRule,
     NodeIdValidityRule,
     RequiredNodeFieldsRule,
     RequiredWorkflowFieldsRule,
-    SelfDependencyRule,
     UniqueNodeIdsRule,
 )
 
@@ -159,26 +158,61 @@ def test_node_configuration_rule_enforces_handler_contracts(
     assert NodeConfigurationRule().validate(workflow)[0].code == code
 
 
-def test_dependency_references_rule_rejects_unknown_dependencies() -> None:
+def test_dependency_reference_rule_rejects_unknown_dependencies() -> None:
     workflow = valid_workflow()
     workflow["dag"]["nodes"][1]["dependencies"] = ["missing"]
 
-    error = DependencyReferencesRule().validate(workflow)[0]
+    error = DependencyReferenceRule().validate(workflow)[0]
 
     assert error.code == "unknown_dependency"
     assert error.node_id == "get_user"
     assert error.dependency_id == "missing"
 
 
-def test_self_dependency_rule_rejects_self_references() -> None:
+def test_dependency_reference_rule_rejects_self_references() -> None:
     workflow = valid_workflow()
     workflow["dag"]["nodes"][1]["dependencies"] = ["get_user"]
 
-    error = SelfDependencyRule().validate(workflow)[0]
+    error = DependencyReferenceRule().validate(workflow)[0]
 
     assert error.code == "self_dependency"
     assert error.node_id == "get_user"
     assert error.dependency_id == "get_user"
+
+
+def test_dependency_reference_rule_rejects_duplicate_dependencies() -> None:
+    workflow = valid_workflow()
+    workflow["dag"]["nodes"][3]["dependencies"] = ["get_user", "get_user"]
+
+    error = DependencyReferenceRule().validate(workflow)[0]
+
+    assert error.code == "duplicate_dependency"
+    assert error.node_id == "output"
+    assert error.dependency_id == "get_user"
+
+
+def test_dependency_reference_rule_allows_cyclic_references_without_cycle_error() -> None:
+    workflow = valid_workflow()
+    workflow["dag"]["nodes"][0]["dependencies"] = ["output"]
+
+    errors = DependencyReferenceRule().validate(workflow)
+
+    assert all(error.code != "cyclic_dependency" for error in errors)
+
+
+def test_dependency_reference_rule_reports_errors_in_deterministic_order() -> None:
+    workflow = valid_workflow()
+    workflow["dag"]["nodes"][1]["dependencies"] = ["missing", "get_user", "input", "input"]
+    workflow["dag"]["nodes"][3]["dependencies"] = ["unknown_second"]
+
+    errors = DependencyReferenceRule().validate(workflow)
+
+    assert [(error.code, error.path) for error in errors] == [
+        ("unknown_dependency", "dag.nodes[1].dependencies[0]"),
+        ("self_dependency", "dag.nodes[1].dependencies[1]"),
+        ("duplicate_dependency", "dag.nodes[1].dependencies[3]"),
+        ("unknown_dependency", "dag.nodes[3].dependencies[0]"),
+    ]
 
 
 def test_cycle_detection_rule_rejects_cycles() -> None:
@@ -201,8 +235,7 @@ def test_cycle_detection_rule_rejects_cycles() -> None:
         UniqueNodeIdsRule(),
         HandlerDefinitionRule(),
         NodeConfigurationRule(),
-        DependencyReferencesRule(),
-        SelfDependencyRule(),
+        DependencyReferenceRule(),
         CycleDetectionRule(),
     ],
 )
@@ -221,8 +254,7 @@ def test_rules_do_not_mutate_workflow() -> None:
         UniqueNodeIdsRule(),
         HandlerDefinitionRule(),
         NodeConfigurationRule(),
-        DependencyReferencesRule(),
-        SelfDependencyRule(),
+        DependencyReferenceRule(),
         CycleDetectionRule(),
     ):
         rule.validate(workflow)

@@ -41,8 +41,7 @@ class DefaultWorkflowRuleProvider:
     def get_rules(self) -> list[WorkflowValidationRule]:
         from app.domain.validation.rules.cycles import CycleDetectionRule
         from app.domain.validation.rules.dependencies import (
-            DependencyReferencesRule,
-            SelfDependencyRule,
+            DependencyReferenceRule,
         )
         from app.domain.validation.rules.fields import (
             RequiredNodeFieldsRule,
@@ -64,8 +63,7 @@ class DefaultWorkflowRuleProvider:
             UniqueNodeIdsRule(),
             HandlerDefinitionRule(),
             NodeConfigurationRule(),
-            DependencyReferencesRule(),
-            SelfDependencyRule(),
+            DependencyReferenceRule(),
             CycleDetectionRule(),
         ]
 
