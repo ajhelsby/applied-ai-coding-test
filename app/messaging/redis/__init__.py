@@ -8,6 +8,7 @@ from app.messaging.redis.client import (
 )
 from app.messaging.redis.streams import (
     WORKFLOW_EVENTS_STREAM,
+    WORKFLOW_TASK_COMPLETIONS_STREAM,
     WORKFLOW_TASKS_STREAM,
     ack,
     autoclaim,
@@ -17,6 +18,7 @@ from app.messaging.redis.streams import (
 
 __all__ = [
     "WORKFLOW_EVENTS_STREAM",
+    "WORKFLOW_TASK_COMPLETIONS_STREAM",
     "WORKFLOW_TASKS_STREAM",
     "ack",
     "autoclaim",
