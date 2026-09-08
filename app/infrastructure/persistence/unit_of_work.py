@@ -6,9 +6,11 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import cast
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionFactory
+from app.domain.errors.persistence import WorkflowPersistenceError
 from app.domain.repositories.node_execution_repository import NodeExecutionRepository
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.repositories.workflow_execution_repository import WorkflowExecutionRepository
@@ -44,6 +46,9 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             try:
                 yield self
                 await session.commit()
+            except SQLAlchemyError as error:
+                await session.rollback()
+                raise WorkflowPersistenceError("Unable to persist workflow data.") from error
             except Exception:
                 await session.rollback()
                 raise
