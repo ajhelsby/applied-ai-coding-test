@@ -51,7 +51,11 @@ def make_execution() -> WorkflowExecution:
 
 
 def make_node(node_id: str = "node-1") -> WorkflowNode:
-    return WorkflowNode(id=node_id, handler="example.handler")
+    return WorkflowNode(
+        id=node_id,
+        handler="example.handler",
+        config={"url": "https://example.com/task"},
+    )
 
 
 def test_dispatch_publishes_task_after_claiming_node() -> None:
@@ -78,6 +82,8 @@ def test_dispatch_publishes_task_after_claiming_node() -> None:
             "task_id": result.task_id,
             "execution_id": str(execution.execution_id),
             "node_id": node.id,
+            "handler": "example.handler",
+            "handler_config": '{"url":"https://example.com/task"}',
             "resolved_input": '{"value":"resolved"}',
         }
     ]

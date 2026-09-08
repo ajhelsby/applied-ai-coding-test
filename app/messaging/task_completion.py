@@ -5,8 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from json import JSONDecodeError, loads
+from json import dumps
 from uuid import UUID
+
+from app.messaging.stream_fields import json_object_field, required_field
 
 
 class TaskCompletionStatus(StrEnum):
@@ -29,18 +31,43 @@ class TaskCompletionEvent:
     error_message: str | None = None
     error_type: str | None = None
 
+    def to_stream_fields(self) -> dict[str, str]:
+        """Serialize the completion event for publishing to Redis Streams."""
+
+        fields = {
+            "event_id": str(self.event_id),
+            "task_id": self.task_id,
+            "execution_id": str(self.execution_id),
+            "node_id": self.node_id,
+            "status": self.status.value,
+        }
+        if self.status is TaskCompletionStatus.COMPLETED:
+            if self.output_data is None:
+                raise ValueError("Completed task completion events require output_data.")
+            return {
+                **fields,
+                "output_data": dumps(self.output_data, separators=(",", ":"), sort_keys=True),
+            }
+        if self.error_message is None or self.error_type is None:
+            raise ValueError("Failed task completion events require error information.")
+        return {
+            **fields,
+            "error_message": self.error_message,
+            "error_type": self.error_type,
+        }
+
     @classmethod
     def from_stream_fields(cls, fields: Mapping[str, str]) -> TaskCompletionEvent:
         """Parse and validate a flat Redis stream completion event."""
 
-        event_id = UUID(_required_field(fields, "event_id"))
-        task_id = _required_field(fields, "task_id")
-        execution_id = UUID(_required_field(fields, "execution_id"))
-        node_id = _required_field(fields, "node_id")
-        status = TaskCompletionStatus(_required_field(fields, "status"))
+        event_id = UUID(required_field(fields, "event_id", "Task completion event"))
+        task_id = required_field(fields, "task_id", "Task completion event")
+        execution_id = UUID(required_field(fields, "execution_id", "Task completion event"))
+        node_id = required_field(fields, "node_id", "Task completion event")
+        status = TaskCompletionStatus(required_field(fields, "status", "Task completion event"))
 
         if status is TaskCompletionStatus.COMPLETED:
-            output_data = _parse_output_data(_required_field(fields, "output_data"))
+            output_data = json_object_field(fields, "output_data", "Task completion event")
             return cls(
                 event_id=event_id,
                 task_id=task_id,
@@ -56,23 +83,6 @@ class TaskCompletionEvent:
             execution_id=execution_id,
             node_id=node_id,
             status=status,
-            error_message=_required_field(fields, "error_message"),
-            error_type=_required_field(fields, "error_type"),
+            error_message=required_field(fields, "error_message", "Task completion event"),
+            error_type=required_field(fields, "error_type", "Task completion event"),
         )
-
-
-def _required_field(fields: Mapping[str, str], field_name: str) -> str:
-    value = fields.get(field_name)
-    if value is None or not value.strip():
-        raise ValueError(f"Task completion event field '{field_name}' is required.")
-    return value
-
-
-def _parse_output_data(serialized_output: str) -> dict[str, object]:
-    try:
-        output_data = loads(serialized_output)
-    except JSONDecodeError as error:
-        raise ValueError("Task completion event field 'output_data' must contain JSON.") from error
-    if not isinstance(output_data, dict):
-        raise ValueError("Task completion event field 'output_data' must contain a JSON object.")
-    return output_data
