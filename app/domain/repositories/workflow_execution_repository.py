@@ -27,5 +27,6 @@ class WorkflowExecutionRepository(Protocol):
         *,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
+        input_data: dict[str, object] | None = None,
     ) -> bool:
         """Update execution status only if current status matches expected status."""

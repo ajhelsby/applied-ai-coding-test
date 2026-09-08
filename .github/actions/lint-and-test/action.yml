@@ -35,5 +35,5 @@ runs:
       env:
         PYTHONPATH: .
         DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/applied_ai_db
-      run: uv run pytest -q tests/unit/test_main.py
+      run: uv run pytest -q tests/unit
       shell: bash

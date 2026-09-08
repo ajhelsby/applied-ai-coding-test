@@ -23,3 +23,11 @@ class WorkflowSubmissionRequest(BaseModel):
     name: str
     dag: WorkflowDagRequest = Field(default_factory=WorkflowDagRequest)
     created_by: str | None = None
+
+
+class WorkflowTriggerRequest(BaseModel):
+    """Workflow trigger request payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: dict[str, object] = Field(default_factory=dict)

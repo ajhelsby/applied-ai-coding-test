@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.state.states import WorkflowExecutionStatus
+
 
 class WorkflowSubmissionResponse(BaseModel):
     """Workflow submission success response payload."""
@@ -40,3 +42,10 @@ class PersistenceErrorResponse(BaseModel):
 
     error_code: str
     message: str
+
+
+class WorkflowTriggerResponse(BaseModel):
+    """Workflow trigger acknowledgement payload."""
+
+    execution_id: UUID
+    status: WorkflowExecutionStatus

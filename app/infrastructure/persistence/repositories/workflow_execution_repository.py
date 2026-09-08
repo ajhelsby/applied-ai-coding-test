@@ -63,6 +63,7 @@ class SqlAlchemyWorkflowExecutionRepository(WorkflowExecutionRepository):
         *,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
+        input_data: dict[str, object] | None = None,
     ) -> bool:
         values: dict[str, object] = {
             "status": new_status.value,
@@ -72,6 +73,8 @@ class SqlAlchemyWorkflowExecutionRepository(WorkflowExecutionRepository):
             values["started_at"] = started_at
         if completed_at is not None:
             values["completed_at"] = completed_at
+        if input_data is not None:
+            values["input_data"] = input_data
 
         result = await self._session.execute(
             update(WorkflowExecutionRecord)
