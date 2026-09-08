@@ -247,10 +247,7 @@ def test_trigger_workflow_returns_running_status_for_pending_execution() -> None
     assert response.status_code == 202
     assert response.json()["execution_id"] == str(execution.execution_id)
     assert response.json()["status"] == "running"
-    assert (
-        unit_of_work.workflow_executions.executions[0].status
-        == WorkflowExecutionStatus.RUNNING
-    )
+    assert unit_of_work.workflow_executions.executions[0].status == WorkflowExecutionStatus.RUNNING
     assert unit_of_work.outbox_events.events == [execution.execution_id]
 
 
