@@ -7,7 +7,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from json import dumps
 from typing import Protocol
 from uuid import UUID, uuid5
 
@@ -18,6 +17,7 @@ from app.domain.models.node import WorkflowNode
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
 from app.messaging.redis.streams import WORKFLOW_TASKS_STREAM, publish
+from app.messaging.task_messages import NodeTaskMessage
 
 TASK_ID_NAMESPACE = UUID("1f3cd7dd-05c9-48e9-9ad3-95520ee7ae8d")
 TaskPublisher = Callable[[str, dict[str, str]], Awaitable[str]]
@@ -107,12 +107,14 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
         try:
             await self._task_publisher(
                 WORKFLOW_TASKS_STREAM,
-                {
-                    "task_id": task_id,
-                    "execution_id": str(execution.execution_id),
-                    "node_id": node.id,
-                    "resolved_input": dumps(resolved_input, separators=(",", ":"), sort_keys=True),
-                },
+                NodeTaskMessage(
+                    task_id=task_id,
+                    execution_id=execution.execution_id,
+                    node_id=node.id,
+                    handler=node.handler,
+                    handler_config=node.config,
+                    resolved_input=resolved_input,
+                ).to_stream_fields(),
             )
         except RedisError as error:
             async with unit_of_work.transaction() as transaction:

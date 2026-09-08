@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Final, cast
+from typing import Any, Final
 
 import redis
 from redis import Redis
@@ -11,7 +11,7 @@ from redis.retry import Retry
 
 _REDIS_URL_ENV: Final[str] = "REDIS_URL"
 _redis_client: Redis[str] | None = None
-_async_redis_client: aioredis.Redis[str] | None = None
+_async_redis_client: aioredis.Redis[Any] | None = None
 
 
 def _get_redis_url() -> str:
@@ -50,17 +50,14 @@ def close_redis_client() -> None:
 def get_async_redis_client() -> aioredis.Redis[str]:
     global _async_redis_client
     if _async_redis_client is None:
-        _async_redis_client = cast(
-            aioredis.Redis[str],
-            aioredis.from_url(
-                _get_redis_url(),
-                decode_responses=True,
-                retry=Retry(ExponentialBackoff(base=1, cap=10), retries=5),
-                retry_on_error=[redis.ConnectionError, redis.TimeoutError],
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                health_check_interval=30,
-            ),
+        _async_redis_client = aioredis.from_url(
+            _get_redis_url(),
+            decode_responses=True,
+            retry=Retry(ExponentialBackoff(base=1, cap=10), retries=5),
+            retry_on_error=[redis.ConnectionError, redis.TimeoutError],
+            socket_connect_timeout=5,
+            socket_timeout=5,
+            health_check_interval=30,
         )
     return _async_redis_client
 

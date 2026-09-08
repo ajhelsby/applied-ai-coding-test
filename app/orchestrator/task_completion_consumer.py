@@ -7,14 +7,13 @@ from typing import Protocol
 
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.messaging.redis.streams import (
+    ORCHESTRATOR_COMPLETIONS_GROUP,
     WORKFLOW_TASK_COMPLETIONS_STREAM,
     ack,
     consume,
 )
 from app.messaging.task_completion import TaskCompletionEvent
 from app.services.task_completion_service import TaskCompletionService
-
-ORCHESTRATOR_COMPLETIONS_GROUP = "orchestrator-completions"
 
 
 class TaskCompletionProcessor(Protocol):
