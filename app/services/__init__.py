@@ -9,6 +9,7 @@ from app.services.node_task_dispatcher import (
 )
 from app.services.workflow_definition_service import WorkflowDefinitionService
 from app.services.workflow_execution_results_service import WorkflowExecutionResultsService
+from app.services.workflow_readiness_service import WorkflowReadinessService
 from app.services.workflow_trigger_service import WorkflowTriggerService
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "RedisNodeTaskDispatcher",
     "WorkflowDefinitionService",
     "WorkflowExecutionResultsService",
+    "WorkflowReadinessService",
     "WorkflowTriggerService",
     "create_task_id",
 ]
