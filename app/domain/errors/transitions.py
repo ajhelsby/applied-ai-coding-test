@@ -1,8 +1,8 @@
-"""Domain-level exceptions."""
+"""Transition-related domain exceptions."""
 
 from __future__ import annotations
 
-from app.domain.states import NodeExecutionStatus, WorkflowExecutionStatus
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 
 
 class InvalidWorkflowTransitionError(ValueError):

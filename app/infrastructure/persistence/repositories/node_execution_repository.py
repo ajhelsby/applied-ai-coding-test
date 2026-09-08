@@ -10,9 +10,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.execution import NodeExecution
+from app.domain.models.execution import NodeExecution
 from app.domain.repositories.node_execution_repository import NodeExecutionRepository
-from app.domain.states import NodeExecutionStatus
+from app.domain.state.states import NodeExecutionStatus
 from app.infrastructure.persistence.models.node_execution import NodeExecutionRecord
 
 

@@ -8,8 +8,11 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.state_machine import validate_node_transition, validate_workflow_transition
-from app.domain.states import NodeExecutionStatus, WorkflowExecutionStatus
+from app.domain.state.state_machine import (
+    validate_node_transition,
+    validate_workflow_transition,
+)
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 
 
 class WorkflowExecution(BaseModel):

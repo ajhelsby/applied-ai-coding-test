@@ -2,10 +2,13 @@ from uuid import uuid4
 
 import pytest
 
-from app.domain.exceptions import InvalidNodeTransitionError, InvalidWorkflowTransitionError
-from app.domain.execution import NodeExecution, WorkflowExecution
-from app.domain.state_machine import NODE_TRANSITIONS, WORKFLOW_TRANSITIONS
-from app.domain.states import NodeExecutionStatus, WorkflowExecutionStatus
+from app.domain.errors.transitions import (
+    InvalidNodeTransitionError,
+    InvalidWorkflowTransitionError,
+)
+from app.domain.models.execution import NodeExecution, WorkflowExecution
+from app.domain.state.state_machine import NODE_TRANSITIONS, WORKFLOW_TRANSITIONS
+from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 
 
 @pytest.mark.parametrize(
