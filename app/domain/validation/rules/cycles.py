@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from app.domain.errors.validation import WorkflowValidationError
-from app.domain.validation.rules._workflow import error, nodes_from
+from app.domain.validation.rules._workflow import nodes_from
 from app.domain.validation.rules.node_ids import NODE_ID_PATTERN
 
 
@@ -35,28 +35,58 @@ class CycleDetectionRule:
         }
         visited: set[str] = set()
         active: set[str] = set()
+        stack_index: dict[str, int] = {}
+        traversal_stack: list[str] = []
         errors: list[WorkflowValidationError] = []
 
-        def visit(node_id: str) -> None:
-            visited.add(node_id)
-            active.add(node_id)
-            for dependency_id in graph[node_id]:
+        for start_node_id in graph:
+            if start_node_id in visited:
+                continue
+
+            frame_stack: list[tuple[str, int]] = [(start_node_id, 0)]
+            visited.add(start_node_id)
+            active.add(start_node_id)
+            stack_index[start_node_id] = 0
+            traversal_stack.append(start_node_id)
+
+            while frame_stack:
+                node_id, dependency_index = frame_stack[-1]
+                dependencies = graph[node_id]
+
+                if dependency_index >= len(dependencies):
+                    frame_stack.pop()
+                    active.remove(node_id)
+                    stack_index.pop(node_id, None)
+                    traversal_stack.pop()
+                    continue
+
+                dependency_id = dependencies[dependency_index]
+                frame_stack[-1] = (node_id, dependency_index + 1)
+
                 if dependency_id in active:
+                    cycle_start_index = stack_index[dependency_id]
+                    cycle_path = traversal_stack[cycle_start_index:] + [dependency_id]
                     errors.append(
-                        error(
-                            "cyclic_dependency",
-                            f"Node '{node_id}' participates in a cyclic dependency "
-                            f"through '{dependency_id}'.",
-                            "dag.nodes",
+                        WorkflowValidationError(
+                            code="cyclic_dependency",
+                            message=(
+                                f"Node '{node_id}' participates in a cyclic dependency "
+                                f"through '{dependency_id}'."
+                            ),
+                            path="dag.nodes",
                             node_id=node_id,
                             dependency_id=dependency_id,
+                            meta={"cycle_path": "->".join(cycle_path)},
                         )
                     )
-                elif dependency_id in graph and dependency_id not in visited:
-                    visit(dependency_id)
-            active.remove(node_id)
+                    continue
 
-        for node_id in graph:
-            if node_id not in visited:
-                visit(node_id)
+                if dependency_id not in graph or dependency_id in visited:
+                    continue
+
+                visited.add(dependency_id)
+                active.add(dependency_id)
+                stack_index[dependency_id] = len(traversal_stack)
+                traversal_stack.append(dependency_id)
+                frame_stack.append((dependency_id, 0))
         return errors

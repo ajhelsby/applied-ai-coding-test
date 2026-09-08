@@ -20,17 +20,17 @@ class DependencyReferenceRule:
             if not isinstance(dependencies, list):
                 continue
             node_id = node.get("id")
-            context = node_id if isinstance(node_id, str) else None
+            node_context = node_id if isinstance(node_id, str) else None
             seen: set[str] = set()
             for dependency_index, dependency_id in enumerate(dependencies):
                 if not isinstance(dependency_id, str) or dependency_id not in known_ids:
                     errors.append(
                         error(
                             "unknown_dependency",
-                            f"Node '{context or index}' references unknown dependency "
+                            f"Node '{node_context or index}' references unknown dependency "
                             f"'{dependency_id}'.",
                             f"dag.nodes[{index}].dependencies[{dependency_index}]",
-                            node_id=context,
+                            node_id=node_context,
                             dependency_id=(
                                 dependency_id if isinstance(dependency_id, str) else None
                             ),
@@ -38,13 +38,13 @@ class DependencyReferenceRule:
                     )
                     continue
 
-                if context is not None and dependency_id == context:
+                if node_context is not None and dependency_id == node_context:
                     errors.append(
                         error(
                             "self_dependency",
-                            f"Node '{context}' cannot depend on itself.",
+                            f"Node '{node_context}' cannot depend on itself.",
                             f"dag.nodes[{index}].dependencies[{dependency_index}]",
-                            node_id=context,
+                            node_id=node_context,
                             dependency_id=dependency_id,
                         )
                     )
@@ -54,10 +54,10 @@ class DependencyReferenceRule:
                     errors.append(
                         error(
                             "duplicate_dependency",
-                            f"Node '{context or index}' declares duplicate dependency "
+                            f"Node '{node_context or index}' declares duplicate dependency "
                             f"'{dependency_id}'.",
                             f"dag.nodes[{index}].dependencies[{dependency_index}]",
-                            node_id=context,
+                            node_id=node_context,
                             dependency_id=dependency_id,
                         )
                     )
