@@ -38,7 +38,6 @@ class CycleDetectionRule:
         stack_index: dict[str, int] = {}
         traversal_stack: list[str] = []
         errors: list[WorkflowValidationError] = []
-        seen_cycle_paths: set[tuple[str, ...]] = set()
 
         for start_node_id in graph:
             if start_node_id in visited:
@@ -67,10 +66,6 @@ class CycleDetectionRule:
                 if dependency_id in active:
                     cycle_start_index = stack_index[dependency_id]
                     cycle_path = traversal_stack[cycle_start_index:] + [dependency_id]
-                    cycle_key = tuple(cycle_path)
-                    if cycle_key in seen_cycle_paths:
-                        continue
-                    seen_cycle_paths.add(cycle_key)
                     errors.append(
                         WorkflowValidationError(
                             code="cyclic_dependency",
