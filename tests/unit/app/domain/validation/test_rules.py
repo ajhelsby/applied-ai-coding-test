@@ -290,7 +290,7 @@ def test_cycle_detection_rule_allows_large_acyclic_graph() -> None:
         {
             "id": f"n{i}",
             "handler": "output" if i else "input",
-            "dependencies": [] if i == 0 else [f"n{i-1}"],
+            "dependencies": [] if i == 0 else [f"n{i - 1}"],
         }
         for i in range(node_count)
     ]
