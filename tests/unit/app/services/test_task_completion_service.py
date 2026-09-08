@@ -94,7 +94,9 @@ class FakeUnitOfWork:
 
 
 def _workflow(workflow_id: UUID, nodes: list[dict[str, object]]) -> Workflow:
-    return Workflow.model_validate({"workflow_id": workflow_id, "name": "wf", "dag": {"nodes": nodes}})
+    return Workflow.model_validate(
+        {"workflow_id": workflow_id, "name": "wf", "dag": {"nodes": nodes}}
+    )
 
 
 def _event(

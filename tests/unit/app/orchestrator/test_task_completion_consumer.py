@@ -52,4 +52,6 @@ def test_consumer_processes_and_acknowledges_completion_event(
 
     assert asyncio.run(consumer.consume_once()) == 1
     assert len(processed_events) == 1
-    assert acknowledgements == [(WORKFLOW_TASK_COMPLETIONS_STREAM, "orchestrator-completions", "1-0")]
+    assert acknowledgements == [
+        (WORKFLOW_TASK_COMPLETIONS_STREAM, "orchestrator-completions", "1-0")
+    ]
