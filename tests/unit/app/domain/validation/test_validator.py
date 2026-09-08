@@ -52,3 +52,25 @@ def test_collect_rules_preserves_provider_and_rule_order() -> None:
 
 def test_default_provider_registers_all_initial_rules() -> None:
     assert len(DefaultWorkflowRuleProvider().get_rules()) == 9
+
+
+def test_default_validator_accepts_valid_linear_dag() -> None:
+    workflow = {
+        "name": "linear-workflow",
+        "dag": {
+            "nodes": [
+                {"id": "input", "handler": "input", "dependencies": []},
+                {
+                    "id": "fetch",
+                    "handler": "call_external_service",
+                    "dependencies": ["input"],
+                    "config": {"url": "https://example.test"},
+                },
+                {"id": "output", "handler": "output", "dependencies": ["fetch"]},
+            ]
+        },
+    }
+
+    errors = WorkflowValidator(DefaultWorkflowRuleProvider().get_rules()).validate(workflow)
+
+    assert errors == []
