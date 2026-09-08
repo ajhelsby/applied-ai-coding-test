@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from json import loads
 from uuid import uuid4
 
 from redis.exceptions import ConnectionError
