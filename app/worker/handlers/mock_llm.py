@@ -4,26 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import random
 from collections.abc import Mapping
-from typing import ClassVar, NotRequired, TypedDict
+from dataclasses import dataclass
+from typing import ClassVar
 
 from app.messaging.task_messages import NodeTaskMessage
 from app.worker.handlers.base import NodeHandler
 
 
-class MockLlmServiceConfig(TypedDict):
-    """Optional controls for the mock LLM service handler."""
-
-    seed: NotRequired[int]
-    latency_ms: NotRequired[int]
-    force_fail: NotRequired[bool]
-    failure_rate: NotRequired[float]
-    failure_message: NotRequired[str]
-
-
-class ParsedMockLlmServiceConfig(TypedDict):
-    """Validated mock LLM service controls with all defaults applied."""
+@dataclass(frozen=True, slots=True)
+class MockLlmServiceSettings:
+    """Application-level controls for mock LLM service behavior."""
 
     seed: int
     latency_ms: int
@@ -46,16 +39,18 @@ class MockLlmServiceNodeHandler(NodeHandler):
         "Mock completion: {prompt}",
     )
 
+    def __init__(self, settings: MockLlmServiceSettings | None = None) -> None:
+        self._settings = settings or self._settings_from_environment()
+
     async def execute(self, task: NodeTaskMessage) -> dict[str, object]:
         """Return a deterministic text response for an inert resolved prompt."""
 
         prompt = self._prompt(task.resolved_input)
-        config = self._config(task.handler_config)
-        await asyncio.sleep(config["latency_ms"] / 1000)
+        await asyncio.sleep(self._settings.latency_ms / 1000)
 
-        generator = random.Random(self._random_seed(config["seed"], prompt))
-        if config["force_fail"] or generator.random() < config["failure_rate"]:
-            raise ValueError(config["failure_message"])
+        generator = random.Random(self._random_seed(self._settings.seed, prompt))
+        if self._settings.force_fail or generator.random() < self._settings.failure_rate:
+            raise ValueError(self._settings.failure_message)
 
         template = generator.choice(self._RESPONSE_TEMPLATES)
         return {
@@ -70,40 +65,59 @@ class MockLlmServiceNodeHandler(NodeHandler):
         return prompt
 
     @classmethod
-    def _config(cls, handler_config: Mapping[str, object]) -> ParsedMockLlmServiceConfig:
-        seed = handler_config.get("seed", cls._DEFAULT_SEED)
-        latency_ms = handler_config.get("latency_ms", cls._DEFAULT_LATENCY_MS)
-        force_fail = handler_config.get("force_fail", False)
-        failure_rate = handler_config.get("failure_rate", cls._DEFAULT_FAILURE_RATE)
-        failure_message = handler_config.get("failure_message", cls._DEFAULT_FAILURE_MESSAGE)
+    def _settings_from_environment(cls) -> MockLlmServiceSettings:
+        latency_ms = cls._integer_environment_value("MOCK_LLM_LATENCY_MS", cls._DEFAULT_LATENCY_MS)
+        if latency_ms < 0:
+            raise ValueError("MOCK_LLM_LATENCY_MS must be a non-negative integer.")
 
-        if isinstance(seed, bool) or not isinstance(seed, int):
-            raise ValueError("Handler 'llm_service' config.seed must be an integer.")
-        if isinstance(latency_ms, bool) or not isinstance(latency_ms, int) or latency_ms < 0:
-            raise ValueError(
-                "Handler 'llm_service' config.latency_ms must be a non-negative integer."
-            )
-        if not isinstance(force_fail, bool):
-            raise ValueError("Handler 'llm_service' config.force_fail must be a boolean.")
-        if isinstance(failure_rate, bool) or not isinstance(failure_rate, (int, float)):
-            raise ValueError(
-                "Handler 'llm_service' config.failure_rate must be a number from 0 to 1."
-            )
-        normalized_failure_rate = float(failure_rate)
-        if not 0.0 <= normalized_failure_rate <= 1.0:
-            raise ValueError("Handler 'llm_service' config.failure_rate must be from 0 to 1.")
-        if not isinstance(failure_message, str) or not failure_message:
-            raise ValueError(
-                "Handler 'llm_service' config.failure_message must be a non-empty string."
-            )
+        failure_rate = cls._float_environment_value(
+            "MOCK_LLM_FAILURE_RATE", cls._DEFAULT_FAILURE_RATE
+        )
+        if not 0.0 <= failure_rate <= 1.0:
+            raise ValueError("MOCK_LLM_FAILURE_RATE must be from 0 to 1.")
 
-        return {
-            "seed": seed,
-            "latency_ms": latency_ms,
-            "force_fail": force_fail,
-            "failure_rate": normalized_failure_rate,
-            "failure_message": failure_message,
-        }
+        failure_message = os.getenv("MOCK_LLM_FAILURE_MESSAGE", cls._DEFAULT_FAILURE_MESSAGE)
+        if not failure_message:
+            raise ValueError("MOCK_LLM_FAILURE_MESSAGE must be a non-empty string.")
+
+        return MockLlmServiceSettings(
+            seed=cls._integer_environment_value("MOCK_LLM_SEED", cls._DEFAULT_SEED),
+            latency_ms=latency_ms,
+            force_fail=cls._boolean_environment_value("MOCK_LLM_FORCE_FAIL", False),
+            failure_rate=failure_rate,
+            failure_message=failure_message,
+        )
+
+    @staticmethod
+    def _integer_environment_value(name: str, default: int) -> int:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except ValueError as error:
+            raise ValueError(f"{name} must be an integer.") from error
+
+    @staticmethod
+    def _float_environment_value(name: str, default: float) -> float:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except ValueError as error:
+            raise ValueError(f"{name} must be a number from 0 to 1.") from error
+
+    @staticmethod
+    def _boolean_environment_value(name: str, default: bool) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        if value.lower() == "true":
+            return True
+        if value.lower() == "false":
+            return False
+        raise ValueError(f"{name} must be true or false.")
 
     @staticmethod
     def _random_seed(seed: int, prompt: str) -> int:
