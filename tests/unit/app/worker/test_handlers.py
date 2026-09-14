@@ -7,7 +7,10 @@ import pytest
 
 from app.messaging.task_messages import NodeTaskMessage
 from app.worker.handlers import (
+    InputNodeHandler,
+    MockExternalServiceNodeHandler,
     NodeHandlerRegistry,
+    OutputNodeHandler,
     UnknownNodeHandlerError,
     WorkerTaskExecutor,
 )
@@ -47,3 +50,11 @@ def test_external_service_handler_returns_mocked_response() -> None:
 def test_unknown_handler_is_rejected() -> None:
     with pytest.raises(UnknownNodeHandlerError, match="unknown"):
         NodeHandlerRegistry().resolve("unknown")
+
+
+def test_registry_resolves_supported_handlers() -> None:
+    registry = NodeHandlerRegistry()
+
+    assert isinstance(registry.resolve("input"), InputNodeHandler)
+    assert isinstance(registry.resolve("output"), OutputNodeHandler)
+    assert isinstance(registry.resolve("call_external_service"), MockExternalServiceNodeHandler)
