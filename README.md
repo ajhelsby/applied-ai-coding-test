@@ -42,6 +42,20 @@ Configure mock LLM behavior on the Worker process with environment variables:
 | `MOCK_LLM_FAILURE_RATE`    | `0.0`                       | Simulated failure probability from `0.0` through `1.0`.               |
 | `MOCK_LLM_FAILURE_MESSAGE` | `Mock LLM service failure.` | Error message for simulated failures.                                 |
 
+## Mock external service configuration
+
+Configure mock external-service behavior on the Worker process with environment variables. The
+handler never makes an HTTP request; configured URLs and resolved workflow input are returned as
+inert response data.
+
+| Variable                                | Default                          | Description                                              |
+| --------------------------------------- | -------------------------------- | -------------------------------------------------------- |
+| `MOCK_EXTERNAL_SERVICE_SEED`            | `0`                              | Seed used for deterministic simulated failure decisions. |
+| `MOCK_EXTERNAL_SERVICE_LATENCY_MS`      | `1500`                           | Non-blocking simulated response delay in milliseconds.   |
+| `MOCK_EXTERNAL_SERVICE_FORCE_FAIL`      | `false`                          | Set to `true` to fail every mock external-service task.  |
+| `MOCK_EXTERNAL_SERVICE_FAILURE_RATE`    | `0.0`                            | Simulated failure probability from `0.0` through `1.0`.  |
+| `MOCK_EXTERNAL_SERVICE_FAILURE_MESSAGE` | `Mock external service failure.` | Error message for simulated failures.                    |
+
 ### Horizontal scaling example
 
 ```bash
