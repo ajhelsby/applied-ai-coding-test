@@ -48,6 +48,41 @@ def test_input_handler_returns_resolved_input() -> None:
     assert output == {"value": "resolved"}
 
 
+def test_input_handler_returns_empty_input() -> None:
+    output = asyncio.run(WorkerTaskExecutor().execute(_task("input", resolved_input={})))
+
+    assert output == {}
+
+
+def test_input_handler_preserves_structured_input() -> None:
+    resolved_input = {
+        "request": {
+            "document_id": "doc-123",
+            "options": {"draft": True},
+        },
+        "labels": ["priority", "customer"],
+    }
+
+    output = asyncio.run(
+        WorkerTaskExecutor().execute(_task("input", resolved_input=resolved_input))
+    )
+
+    assert output == resolved_input
+
+
+def test_output_handler_returns_dependency_keyed_fan_in_aggregate() -> None:
+    resolved_input = {
+        "get_posts": {"posts": [{"id": 1}, {"id": 2}]},
+        "get_comments": {"comments": [{"post_id": 1, "text": "Useful"}]},
+    }
+
+    output = asyncio.run(
+        WorkerTaskExecutor().execute(_task("output", resolved_input=resolved_input))
+    )
+
+    assert output == resolved_input
+
+
 def test_external_service_handler_returns_mocked_response() -> None:
     output = asyncio.run(
         WorkerTaskExecutor().execute(

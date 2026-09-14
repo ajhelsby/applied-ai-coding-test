@@ -7,7 +7,7 @@ from app.worker.handlers.base import NodeHandler
 
 
 class OutputNodeHandler(NodeHandler):
-    """Expose resolved workflow data as the workflow output."""
+    """Return the dependency-ID-keyed aggregate resolved by the orchestrator."""
 
     async def execute(self, task: NodeTaskMessage) -> dict[str, object]:
         return dict(task.resolved_input)

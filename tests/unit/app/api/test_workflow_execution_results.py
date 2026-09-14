@@ -91,6 +91,43 @@ def test_get_workflow_execution_results_returns_aggregated_output_for_completed_
     assert payload["results"][0]["output_data"] == {"result": "ok"}
 
 
+def test_get_workflow_execution_results_exposes_completed_output_node_payload() -> None:
+    execution = WorkflowExecution(
+        workflow_id=uuid4(),
+        status=WorkflowExecutionStatus.COMPLETED,
+    )
+    input_node = NodeExecution(
+        workflow_execution_id=execution.execution_id,
+        node_id="input",
+        status=NodeExecutionStatus.COMPLETED,
+        output_data={"topic": "workflows"},
+    )
+    output_node = NodeExecution(
+        workflow_execution_id=execution.execution_id,
+        node_id="output",
+        status=NodeExecutionStatus.COMPLETED,
+        output_data={
+            "get_posts": {"posts": [{"id": 1}]},
+            "get_comments": {"comments": [{"post_id": 1}]},
+        },
+    )
+    unit_of_work = InMemoryUnitOfWork([execution], [input_node, output_node])
+    app.dependency_overrides[get_unit_of_work] = lambda: unit_of_work
+    try:
+        response = client.get(f"/workflows/{execution.execution_id}/results")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert results is not None
+    results_by_node_id = {item["node_id"]: item["output_data"] for item in results}
+    assert results_by_node_id["output"] == {
+        "get_posts": {"posts": [{"id": 1}]},
+        "get_comments": {"comments": [{"post_id": 1}]},
+    }
+
+
 def test_get_workflow_execution_results_returns_pending_without_results() -> None:
     execution = WorkflowExecution(
         workflow_id=uuid4(),

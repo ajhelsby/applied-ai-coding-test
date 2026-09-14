@@ -7,7 +7,7 @@ from app.worker.handlers.base import NodeHandler
 
 
 class InputNodeHandler(NodeHandler):
-    """Pass resolved workflow input into the workflow."""
+    """Return inert, orchestrator-resolved execution input."""
 
     async def execute(self, task: NodeTaskMessage) -> dict[str, object]:
         return dict(task.resolved_input)

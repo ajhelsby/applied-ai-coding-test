@@ -12,7 +12,12 @@ from app.services.task_completion_service import (
     TaskCompletionOutcome,
     TaskCompletionService,
 )
+from app.services.template_resolution import NodeInputResolver, TemplateResolutionError
 from app.services.workflow_definition_service import WorkflowDefinitionService
+from app.services.workflow_dispatch_service import (
+    WorkflowDispatchDecision,
+    WorkflowDispatchService,
+)
 from app.services.workflow_execution_results_service import WorkflowExecutionResultsService
 from app.services.workflow_finalization_service import (
     WorkflowFinalizationDecision,
@@ -29,7 +34,11 @@ __all__ = [
     "TaskCompletionDecision",
     "TaskCompletionOutcome",
     "TaskCompletionService",
+    "NodeInputResolver",
+    "TemplateResolutionError",
     "WorkflowDefinitionService",
+    "WorkflowDispatchDecision",
+    "WorkflowDispatchService",
     "WorkflowExecutionResultsService",
     "WorkflowFinalizationDecision",
     "WorkflowFinalizationService",
