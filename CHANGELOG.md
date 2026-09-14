@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.4](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.3...v0.0.4) (2026-09-14)
+
+
+### Features
+
+* **#26:** Add handler registry with default and custom handler resolution logic ([#68](https://github.com/ajhelsby/applied-ai-coding-test/issues/68)) ([297317b](https://github.com/ajhelsby/applied-ai-coding-test/commit/297317b33368686b19aa1f0c46db60cc1e3a8531))
+* **#27:** Add workflow trigger consumer for processing execution tri… ([#71](https://github.com/ajhelsby/applied-ai-coding-test/issues/71)) ([9bb8f6e](https://github.com/ajhelsby/applied-ai-coding-test/commit/9bb8f6e765a284bce3da558ffaf736fd2af50380))
+* **#28:** Add configurable mock external service environment variables and deterministic response logic ([#72](https://github.com/ajhelsby/applied-ai-coding-test/issues/72)) ([18e8edf](https://github.com/ajhelsby/applied-ai-coding-test/commit/18e8edf8ce456bc08bd6ed54f8a92fc6c8fcc9e9))
+* **#29:** Add mock LLM service node handler implementation with dete… ([#70](https://github.com/ajhelsby/applied-ai-coding-test/issues/70)) ([a8846f1](https://github.com/ajhelsby/applied-ai-coding-test/commit/a8846f1cf774364652ffd30b1f76c8b11fc22ccd))
+
 ## [0.0.3](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.2...v0.0.3) (2026-09-08)
 
 
