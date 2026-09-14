@@ -30,6 +30,18 @@
   - `200` with `results: null` for `FAILED` executions.
   - `200` with `results` for `COMPLETED` executions, with each result item preserving node-level provenance (`node_id`) and output payload (`output_data`).
 
+## Mock LLM service configuration
+
+Configure mock LLM behavior on the Worker process with environment variables:
+
+| Variable                   | Default                     | Description                                                           |
+| -------------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `MOCK_LLM_SEED`            | `0`                         | Seed used for deterministic response selection and failure decisions. |
+| `MOCK_LLM_LATENCY_MS`      | `10`                        | Non-blocking simulated response delay in milliseconds.                |
+| `MOCK_LLM_FORCE_FAIL`      | `false`                     | Set to `true` to fail every mock LLM task.                            |
+| `MOCK_LLM_FAILURE_RATE`    | `0.0`                       | Simulated failure probability from `0.0` through `1.0`.               |
+| `MOCK_LLM_FAILURE_MESSAGE` | `Mock LLM service failure.` | Error message for simulated failures.                                 |
+
 ### Horizontal scaling example
 
 ```bash

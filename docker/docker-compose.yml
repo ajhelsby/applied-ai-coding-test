@@ -60,6 +60,11 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MOCK_LLM_SEED: ${MOCK_LLM_SEED:-0}
+      MOCK_LLM_LATENCY_MS: ${MOCK_LLM_LATENCY_MS:-10}
+      MOCK_LLM_FORCE_FAIL: ${MOCK_LLM_FORCE_FAIL:-false}
+      MOCK_LLM_FAILURE_RATE: ${MOCK_LLM_FAILURE_RATE:-0.0}
+      MOCK_LLM_FAILURE_MESSAGE: ${MOCK_LLM_FAILURE_MESSAGE:-Mock LLM service failure.}
     depends_on:
       migrate:
         condition: service_completed_successfully
