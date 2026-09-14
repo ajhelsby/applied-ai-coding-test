@@ -51,25 +51,30 @@ class NodeHandlerRegistry:
     """Resolve task handler identifiers to asynchronous implementations."""
 
     def __init__(self, handlers: Mapping[str, NodeHandler] | None = None) -> None:
-        self._handlers: dict[str, NodeHandler]
-        if handlers is None:
-            self._handlers = {
-                "input": InputNodeHandler(),
-                "output": OutputNodeHandler(),
-                "call_external_service": MockExternalServiceNodeHandler(),
-            }
-        else:
-            self._handlers = dict(handlers)
+        self._handlers = dict(handlers) if handlers is not None else None
 
     def resolve(self, handler_name: str) -> NodeHandler:
         """Return the handler registered for a task's handler identifier."""
 
-        try:
-            return self._handlers[handler_name]
-        except KeyError as error:
-            raise UnknownNodeHandlerError(
-                f"No worker handler is registered for '{handler_name}'."
-            ) from error
+        if self._handlers is not None:
+            try:
+                return self._handlers[handler_name]
+            except KeyError as error:
+                raise UnknownNodeHandlerError(
+                    f"No worker handler is registered for '{handler_name}'."
+                ) from error
+
+        match handler_name:
+            case "input":
+                return InputNodeHandler()
+            case "output":
+                return OutputNodeHandler()
+            case "call_external_service":
+                return MockExternalServiceNodeHandler()
+            case _:
+                raise UnknownNodeHandlerError(
+                    f"No worker handler is registered for '{handler_name}'."
+                )
 
 
 class WorkerTaskExecutor:
