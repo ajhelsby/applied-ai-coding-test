@@ -41,10 +41,7 @@ class NodeInputResolver:
         value: Mapping[str, object],
         dependency_outputs: Mapping[str, Mapping[str, object]],
     ) -> dict[str, object]:
-        return {
-            key: self._resolve_value(item, dependency_outputs)
-            for key, item in value.items()
-        }
+        return {key: self._resolve_value(item, dependency_outputs) for key, item in value.items()}
 
     def _resolve_value(
         self,

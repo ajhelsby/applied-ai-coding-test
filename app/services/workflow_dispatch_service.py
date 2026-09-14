@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from app.domain.errors.transitions import WorkflowExecutionNotFoundError
-from app.domain.repositories.unit_of_work import UnitOfWork
 from app.services.node_task_dispatcher import (
     DispatchResult,
     NodeTaskDispatcher,
