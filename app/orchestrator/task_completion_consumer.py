@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Protocol
+from uuid import UUID
 
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.messaging.redis.streams import (
@@ -13,7 +14,8 @@ from app.messaging.redis.streams import (
     consume,
 )
 from app.messaging.task_completion import TaskCompletionEvent
-from app.services.task_completion_service import TaskCompletionService
+from app.services.task_completion_service import TaskCompletionDecision, TaskCompletionService
+from app.services.workflow_dispatch_service import WorkflowDispatchService
 
 
 class TaskCompletionProcessor(Protocol):
@@ -21,6 +23,18 @@ class TaskCompletionProcessor(Protocol):
 
     async def process(self, event: TaskCompletionEvent, unit_of_work: UnitOfWork) -> object:
         """Persist a completion event."""
+
+
+class ReadyNodeDispatcher(Protocol):
+    """Contract for dispatching nodes promoted by task completion."""
+
+    async def dispatch_ready(
+        self,
+        execution_id: UUID,
+        ready_node_ids: tuple[str, ...],
+        unit_of_work_factory: Callable[[], UnitOfWork],
+    ) -> object:
+        """Dispatch the supplied ready workflow nodes."""
 
 
 class TaskCompletionConsumer:
@@ -31,10 +45,12 @@ class TaskCompletionConsumer:
         consumer_name: str,
         unit_of_work_factory: Callable[[], UnitOfWork],
         completion_service: TaskCompletionProcessor | None = None,
+        dispatch_service: ReadyNodeDispatcher | None = None,
     ) -> None:
         self._consumer_name = consumer_name
         self._unit_of_work_factory = unit_of_work_factory
         self._completion_service = completion_service or TaskCompletionService()
+        self._dispatch_service = dispatch_service or WorkflowDispatchService()
 
     async def consume_once(self) -> int:
         """Process available messages and acknowledge only persisted events."""
@@ -50,7 +66,15 @@ class TaskCompletionConsumer:
         for stream, stream_messages in messages:
             for message_id, fields in stream_messages:
                 event = TaskCompletionEvent.from_stream_fields(fields)
-                await self._completion_service.process(event, self._unit_of_work_factory())
+                decision = await self._completion_service.process(
+                    event, self._unit_of_work_factory()
+                )
+                if isinstance(decision, TaskCompletionDecision):
+                    await self._dispatch_service.dispatch_ready(
+                        event.execution_id,
+                        decision.ready_node_ids,
+                        self._unit_of_work_factory,
+                    )
                 await ack(stream, ORCHESTRATOR_COMPLETIONS_GROUP, message_id)
                 processed += 1
         return processed

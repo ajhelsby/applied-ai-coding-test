@@ -18,6 +18,7 @@ from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
 from app.messaging.redis.streams import WORKFLOW_TASKS_STREAM, publish
 from app.messaging.task_messages import NodeTaskMessage
+from app.services.template_resolution import NodeInputResolver
 
 TASK_ID_NAMESPACE = UUID("1f3cd7dd-05c9-48e9-9ad3-95520ee7ae8d")
 TaskPublisher = Callable[[str, dict[str, str]], Awaitable[str]]
@@ -56,7 +57,6 @@ class NodeTaskDispatcher(Protocol):
         self,
         execution: WorkflowExecution,
         node: WorkflowNode,
-        resolved_input: dict[str, object],
         unit_of_work: UnitOfWork,
     ) -> DispatchResult:
         """Dispatch a single eligible node as a task message."""
@@ -64,7 +64,7 @@ class NodeTaskDispatcher(Protocol):
     async def dispatch_many(
         self,
         execution: WorkflowExecution,
-        nodes_with_resolved_input: list[tuple[WorkflowNode, dict[str, object]]],
+        nodes: list[WorkflowNode],
         unit_of_work_factory: UnitOfWorkFactory,
     ) -> list[DispatchResult]:
         """Dispatch multiple eligible nodes independently."""
@@ -73,20 +73,38 @@ class NodeTaskDispatcher(Protocol):
 class RedisNodeTaskDispatcher(NodeTaskDispatcher):
     """Claim runnable nodes and publish worker-agnostic tasks to Redis Streams."""
 
-    def __init__(self, task_publisher: TaskPublisher = publish) -> None:
+    def __init__(
+        self,
+        task_publisher: TaskPublisher = publish,
+        input_resolver: NodeInputResolver | None = None,
+    ) -> None:
         self._task_publisher = task_publisher
+        self._input_resolver = input_resolver or NodeInputResolver()
 
     async def dispatch(
         self,
         execution: WorkflowExecution,
         node: WorkflowNode,
-        resolved_input: dict[str, object],
         unit_of_work: UnitOfWork,
     ) -> DispatchResult:
-        """Claim a ready node, then publish its task message."""
+        """Resolve, claim, then publish a ready node task."""
 
         task_id = create_task_id(execution.execution_id, node.id)
         async with unit_of_work.transaction() as transaction:
+            node_executions = await transaction.node_executions.get_node_executions_for_execution(
+                execution.execution_id
+            )
+            dependency_outputs = {
+                node_execution.node_id: node_execution.output_data
+                for node_execution in node_executions
+                if node_execution.node_id in node.dependencies
+                and node_execution.status is NodeExecutionStatus.COMPLETED
+            }
+            resolved_input = self._input_resolver.resolve(
+                node,
+                execution.input_data,
+                dependency_outputs,
+            )
             claimed = await transaction.node_executions.update_status_if_current(
                 execution_id=execution.execution_id,
                 node_id=node.id,
@@ -144,7 +162,7 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
     async def dispatch_many(
         self,
         execution: WorkflowExecution,
-        nodes_with_resolved_input: list[tuple[WorkflowNode, dict[str, object]]],
+        nodes: list[WorkflowNode],
         unit_of_work_factory: UnitOfWorkFactory,
     ) -> list[DispatchResult]:
         """Dispatch all eligible nodes concurrently with independent transactions."""
@@ -154,10 +172,9 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                 self.dispatch(
                     execution=execution,
                     node=node,
-                    resolved_input=resolved_input,
                     unit_of_work=unit_of_work_factory(),
                 )
-                for node, resolved_input in nodes_with_resolved_input
+                for node in nodes
             )
         )
         return list(results)

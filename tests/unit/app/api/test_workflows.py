@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.main import app
 from app.domain.errors.persistence import WorkflowPersistenceError
-from app.domain.models.execution import WorkflowExecution
+from app.domain.models.execution import NodeExecution, WorkflowExecution
 from app.domain.models.workflow import Workflow
 from app.domain.state.states import WorkflowExecutionStatus
 from app.infrastructure.persistence.providers import get_unit_of_work
@@ -74,6 +74,15 @@ class InMemoryWorkflowExecutionRepository:
         return False
 
 
+class InMemoryNodeExecutionRepository:
+    def __init__(self) -> None:
+        self.node_executions: list[NodeExecution] = []
+
+    async def upsert_node_execution(self, node_execution: NodeExecution) -> NodeExecution:
+        self.node_executions.append(node_execution)
+        return node_execution
+
+
 class InMemoryOutboxRepository:
     def __init__(self) -> None:
         self.events: list[object] = []
@@ -92,6 +101,7 @@ class InMemoryUnitOfWork:
     def __init__(self) -> None:
         self.workflows = InMemoryWorkflowRepository()
         self.workflow_executions = InMemoryWorkflowExecutionRepository()
+        self.node_executions = InMemoryNodeExecutionRepository()
         self.outbox_events = InMemoryOutboxRepository()
 
     @asynccontextmanager
@@ -114,7 +124,7 @@ class FailingOutboxUnitOfWork(InMemoryUnitOfWork):
 client = TestClient(app)
 
 
-def test_submit_workflow_persists_definition_without_creating_an_execution() -> None:
+def test_submit_workflow_persists_definition_with_a_pending_execution() -> None:
     unit_of_work = InMemoryUnitOfWork()
     app.dependency_overrides[get_unit_of_work] = lambda: unit_of_work
     try:
@@ -139,11 +149,21 @@ def test_submit_workflow_persists_definition_without_creating_an_execution() -> 
         app.dependency_overrides.clear()
 
     assert response.status_code == 201
-    assert UUID(response.json()["execution_id"])
+    execution_id = UUID(response.json()["execution_id"])
     assert response.json()["name"] == "workflow"
     assert response.json()["created_at"]
     assert len(unit_of_work.workflows.workflows) == 1
-    assert len(unit_of_work.workflow_executions.executions) == 0
+    assert len(unit_of_work.workflow_executions.executions) == 1
+    execution = unit_of_work.workflow_executions.executions[0]
+    assert execution.execution_id == execution_id
+    assert execution.workflow_id == unit_of_work.workflows.workflows[0].workflow_id
+    assert execution.status is WorkflowExecutionStatus.PENDING
+    assert [
+        node_execution.node_id for node_execution in unit_of_work.node_executions.node_executions
+    ] == [
+        "input",
+        "fetch",
+    ]
 
 
 def test_build_dag_returns_validated_traversal_graph() -> None:

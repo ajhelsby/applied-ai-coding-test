@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app.domain.dag import DAG
 from app.domain.errors.validation import InvalidWorkflowDefinitionError
+from app.domain.models.execution import NodeExecution, WorkflowExecution
 from app.domain.models.workflow import Workflow
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.validation import (
@@ -65,14 +66,23 @@ class WorkflowDefinitionService:
         definition: Mapping[str, Any],
         unit_of_work: UnitOfWork,
     ) -> WorkflowSubmission:
-        """Validate and persist a workflow definition without starting execution."""
+        """Validate and persist a workflow with a pending execution."""
 
         workflow = self.accept(definition)
+        execution = WorkflowExecution(workflow_id=workflow.workflow_id)
         async with unit_of_work.transaction() as transaction:
             await transaction.workflows.create_workflow(workflow)
+            await transaction.workflow_executions.create_execution(execution)
+            for node in workflow.dag.nodes:
+                await transaction.node_executions.upsert_node_execution(
+                    NodeExecution(
+                        workflow_execution_id=execution.execution_id,
+                        node_id=node.id,
+                    )
+                )
         logger.info("Workflow submitted", extra={"workflow_id": str(workflow.workflow_id)})
         return WorkflowSubmission(
-            execution_id=workflow.workflow_id,
+            execution_id=execution.execution_id,
             name=workflow.name,
             created_at=workflow.created_at,
         )
