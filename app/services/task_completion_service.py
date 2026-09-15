@@ -70,6 +70,15 @@ class TaskCompletionService:
                     f"for execution '{event.execution_id}'."
                 )
 
+            completion_output = (
+                event.output_data if event.status is TaskCompletionStatus.COMPLETED else None
+            )
+            completion_error_message = (
+                event.error_message if event.status is TaskCompletionStatus.FAILED else None
+            )
+            completion_error_type = (
+                event.error_type if event.status is TaskCompletionStatus.FAILED else None
+            )
             target_status = (
                 NodeExecutionStatus.COMPLETED
                 if event.status is TaskCompletionStatus.COMPLETED
@@ -80,9 +89,9 @@ class TaskCompletionService:
                 node_id=event.node_id,
                 expected_current_status=NodeExecutionStatus.RUNNING,
                 new_status=target_status,
-                output_data=event.output_data,
-                error_message=event.error_message,
-                error_type=event.error_type,
+                output_data=completion_output,
+                error_message=completion_error_message,
+                error_type=completion_error_type,
                 completed_at=datetime.now(UTC),
             )
 

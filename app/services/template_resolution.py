@@ -6,6 +6,7 @@ import math
 import re
 from collections.abc import Mapping
 
+from app.domain.models.json import JsonValue
 from app.domain.models.node import WorkflowNode
 
 _TEMPLATE_PATTERN = re.compile(
@@ -25,8 +26,8 @@ class NodeInputResolver:
         self,
         node: WorkflowNode,
         execution_input: Mapping[str, object],
-        dependency_outputs: Mapping[str, Mapping[str, object]],
-    ) -> dict[str, object]:
+        dependency_outputs: Mapping[str, JsonValue],
+    ) -> dict[str, JsonValue]:
         """Resolve a node's worker input without performing I/O or dependency traversal."""
 
         if node.handler == "input":
@@ -39,15 +40,15 @@ class NodeInputResolver:
     def _resolve_object(
         self,
         value: Mapping[str, object],
-        dependency_outputs: Mapping[str, Mapping[str, object]],
-    ) -> dict[str, object]:
+        dependency_outputs: Mapping[str, JsonValue],
+    ) -> dict[str, JsonValue]:
         return {key: self._resolve_value(item, dependency_outputs) for key, item in value.items()}
 
     def _resolve_value(
         self,
         value: object,
-        dependency_outputs: Mapping[str, Mapping[str, object]],
-    ) -> object:
+        dependency_outputs: Mapping[str, JsonValue],
+    ) -> JsonValue:
         if isinstance(value, str):
             return self._resolve_string(value, dependency_outputs)
         if isinstance(value, list):
@@ -59,8 +60,8 @@ class NodeInputResolver:
     def _resolve_string(
         self,
         value: str,
-        dependency_outputs: Mapping[str, Mapping[str, object]],
-    ) -> object:
+        dependency_outputs: Mapping[str, JsonValue],
+    ) -> JsonValue:
         full_match = _TEMPLATE_PATTERN.fullmatch(value)
         if full_match is not None:
             return self._copy_json_value(self._lookup(full_match, dependency_outputs))
@@ -73,11 +74,11 @@ class NodeInputResolver:
     def _lookup(
         self,
         match: re.Match[str],
-        dependency_outputs: Mapping[str, Mapping[str, object]],
-    ) -> object:
+        dependency_outputs: Mapping[str, JsonValue],
+    ) -> JsonValue:
         node_id = match["node_id"]
         try:
-            current: object = dependency_outputs[node_id]
+            current: JsonValue = dependency_outputs[node_id]
         except KeyError as error:
             raise TemplateResolutionError(
                 f"Template references unavailable dependency output '{node_id}'."
@@ -94,7 +95,7 @@ class NodeInputResolver:
     def _interpolate(
         self,
         match: re.Match[str],
-        dependency_outputs: Mapping[str, Mapping[str, object]],
+        dependency_outputs: Mapping[str, JsonValue],
     ) -> str:
         resolved = self._lookup(match, dependency_outputs)
         if isinstance(resolved, str):
@@ -111,11 +112,11 @@ class NodeInputResolver:
         )
 
     @classmethod
-    def _copy_object(cls, value: Mapping[str, object]) -> dict[str, object]:
+    def _copy_object(cls, value: Mapping[str, object]) -> dict[str, JsonValue]:
         return {key: cls._copy_json_value(item) for key, item in value.items()}
 
     @classmethod
-    def _copy_json_value(cls, value: object) -> object:
+    def _copy_json_value(cls, value: object) -> JsonValue:
         if value is None or isinstance(value, bool | int | str):
             return value
         if isinstance(value, float):

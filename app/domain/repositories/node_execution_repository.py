@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from app.domain.models.execution import NodeExecution
+from app.domain.models.json import JsonValue
 from app.domain.state.states import NodeExecutionStatus
+
+
+@dataclass(frozen=True, slots=True)
+class OutputDataNotProvided:
+    """Marker for updates that should preserve the existing output."""
+
+
+OUTPUT_DATA_NOT_PROVIDED = OutputDataNotProvided()
 
 
 class NodeExecutionRepository(Protocol):
@@ -27,7 +37,7 @@ class NodeExecutionRepository(Protocol):
         expected_current_status: NodeExecutionStatus,
         new_status: NodeExecutionStatus,
         *,
-        output_data: dict[str, object] | None = None,
+        output_data: JsonValue | OutputDataNotProvided = OUTPUT_DATA_NOT_PROVIDED,
         error_message: str | None = None,
         error_type: str | None = None,
         started_at: datetime | None = None,

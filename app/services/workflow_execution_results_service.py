@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from app.domain.models.execution import WorkflowExecution
+from app.domain.models.json import JsonValue
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.services.workflow_execution_status_service import WorkflowExecutionStatusService
@@ -19,7 +19,7 @@ class WorkflowNodeResult:
 
     node_id: str
     status: NodeExecutionStatus
-    output_data: dict[str, Any]
+    output_data: JsonValue
     error_message: str | None
     error_type: str | None
     created_at: datetime

@@ -14,7 +14,7 @@ from app.messaging.redis.streams import (
     ack,
     publish,
 )
-from app.messaging.stream_fields import required_field
+from app.messaging.stream_fields import is_json_value, required_field
 from app.messaging.task_completion import TaskCompletionEvent, TaskCompletionStatus
 from app.messaging.task_messages import NodeTaskMessage
 from app.worker.handlers import WorkerTaskExecutor
@@ -65,14 +65,20 @@ class WorkerTaskProcessor:
                 },
             )
         else:
-            event = TaskCompletionEvent(
-                event_id=uuid4(),
-                task_id=task.task_id,
-                execution_id=task.execution_id,
-                node_id=task.node_id,
-                status=TaskCompletionStatus.COMPLETED,
-                output_data=output,
-            )
+            if not is_json_value(output):
+                event = self._failure_event(
+                    task,
+                    TypeError("Worker task output must contain only JSON-compatible values."),
+                )
+            else:
+                event = TaskCompletionEvent(
+                    event_id=uuid4(),
+                    task_id=task.task_id,
+                    execution_id=task.execution_id,
+                    node_id=task.node_id,
+                    status=TaskCompletionStatus.COMPLETED,
+                    output_data=output,
+                )
 
         await self._publish_and_ack(stream, message_id, event)
 

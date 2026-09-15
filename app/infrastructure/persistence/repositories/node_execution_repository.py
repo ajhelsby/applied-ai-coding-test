@@ -12,7 +12,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.execution import NodeExecution
-from app.domain.repositories.node_execution_repository import NodeExecutionRepository
+from app.domain.models.json import JsonValue
+from app.domain.repositories.node_execution_repository import (
+    OUTPUT_DATA_NOT_PROVIDED,
+    NodeExecutionRepository,
+    OutputDataNotProvided,
+)
 from app.domain.state.states import NodeExecutionStatus
 from app.infrastructure.persistence.models.node_execution import NodeExecutionRecord
 
@@ -84,7 +89,7 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
         expected_current_status: NodeExecutionStatus,
         new_status: NodeExecutionStatus,
         *,
-        output_data: dict[str, object] | None = None,
+        output_data: JsonValue | OutputDataNotProvided = OUTPUT_DATA_NOT_PROVIDED,
         error_message: str | None = None,
         error_type: str | None = None,
         started_at: datetime | None = None,
@@ -94,7 +99,7 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
             "status": new_status.value,
             "updated_at": func.now(),
         }
-        if output_data is not None:
+        if not isinstance(output_data, OutputDataNotProvided):
             values["output_data"] = output_data
         if error_message is not None:
             values["error_message"] = error_message
