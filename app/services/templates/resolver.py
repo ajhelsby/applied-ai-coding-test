@@ -95,9 +95,7 @@ class NodeInputResolver:
         dependency_outputs: Mapping[str, JsonValue],
     ) -> str:
         return "".join(
-            segment
-            if isinstance(segment, str)
-            else self._interpolate(segment, dependency_outputs)
+            segment if isinstance(segment, str) else self._interpolate(segment, dependency_outputs)
             for segment in segments
         )
 
