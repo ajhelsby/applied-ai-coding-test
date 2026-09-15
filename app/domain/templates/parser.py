@@ -6,9 +6,11 @@ import re
 from dataclasses import dataclass
 
 _TEMPLATE_DELIMITER_PATTERN = re.compile(r"\{\{.*?\}\}", re.DOTALL)
+_PATH_SEGMENT_PATTERN = r"(?:[A-Za-z][A-Za-z0-9_-]*|[0-9]+)"
 _REFERENCE_EXPRESSION_PATTERN = re.compile(
     r"\s*(?P<node_id>[A-Za-z][A-Za-z0-9_-]*)"
-    r"(?:\s*\.\s*(?P<path>[A-Za-z][A-Za-z0-9_-]*(?:\s*\.\s*[A-Za-z][A-Za-z0-9_-]*)*))\s*"
+    rf"(?:\s*\.\s*(?P<path>{_PATH_SEGMENT_PATTERN}"
+    rf"(?:\s*\.\s*{_PATH_SEGMENT_PATTERN})*))\s*"
 )
 
 

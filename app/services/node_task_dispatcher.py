@@ -94,16 +94,17 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
             node_executions = await transaction.node_executions.get_node_executions_for_execution(
                 execution.execution_id
             )
-            dependency_outputs = {
+            completed_dependency_outputs = {
                 node_execution.node_id: node_execution.output_data
                 for node_execution in node_executions
-                if node_execution.node_id in node.dependencies
+                if node_execution.workflow_execution_id == execution.execution_id
+                and node_execution.node_id in node.dependencies
                 and node_execution.status is NodeExecutionStatus.COMPLETED
             }
             resolved_input = self._input_resolver.resolve(
                 node,
                 execution.input_data,
-                dependency_outputs,
+                completed_dependency_outputs,
             )
             claimed = await transaction.node_executions.update_status_if_current(
                 execution_id=execution.execution_id,
