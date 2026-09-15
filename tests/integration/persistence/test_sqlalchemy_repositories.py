@@ -143,6 +143,58 @@ def test_updates_execution_states_only_when_expected_status_matches(
     asyncio.run(scenario())
 
 
+def test_locks_workflow_execution_until_transaction_completes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async def scenario() -> None:
+        workflow = Workflow(name="execution-lock")
+        execution = WorkflowExecution(workflow_id=workflow.workflow_id)
+        setup_uow = SqlAlchemyUnitOfWork(session_factory)
+
+        async with setup_uow.transaction() as transaction:
+            await transaction.workflows.create_workflow(workflow)
+            await transaction.workflow_executions.create_execution(execution)
+
+        first_locked = asyncio.Event()
+        release_first = asyncio.Event()
+        second_locked = asyncio.Event()
+
+        async def hold_lock() -> None:
+            uow = SqlAlchemyUnitOfWork(session_factory)
+            async with uow.transaction() as transaction:
+                assert (
+                    await transaction.workflow_executions.get_execution_by_id_for_update(
+                        execution.execution_id
+                    )
+                    == execution
+                )
+                first_locked.set()
+                await release_first.wait()
+
+        async def wait_for_lock() -> None:
+            uow = SqlAlchemyUnitOfWork(session_factory)
+            async with uow.transaction() as transaction:
+                assert (
+                    await transaction.workflow_executions.get_execution_by_id_for_update(
+                        execution.execution_id
+                    )
+                    == execution
+                )
+                second_locked.set()
+
+        first_task = asyncio.create_task(hold_lock())
+        await asyncio.wait_for(first_locked.wait(), timeout=1)
+        second_task = asyncio.create_task(wait_for_lock())
+        await asyncio.sleep(0)
+        assert not second_locked.is_set()
+
+        release_first.set()
+        await asyncio.wait_for(asyncio.gather(first_task, second_task), timeout=1)
+        assert second_locked.is_set()
+
+    asyncio.run(scenario())
+
+
 def test_rolls_back_related_writes_when_a_transaction_fails(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

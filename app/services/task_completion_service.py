@@ -47,7 +47,7 @@ class TaskCompletionService:
             raise ValueError("Task completion event task_id does not match its execution and node.")
 
         async with unit_of_work.transaction() as transaction:
-            execution = await transaction.workflow_executions.get_execution_by_id(
+            execution = await transaction.workflow_executions.get_execution_by_id_for_update(
                 event.execution_id
             )
             if execution is None:
@@ -86,33 +86,41 @@ class TaskCompletionService:
                 completed_at=datetime.now(UTC),
             )
 
-        if not updated:
-            if existing_node.status not in {
-                NodeExecutionStatus.COMPLETED,
-                NodeExecutionStatus.FAILED,
-                NodeExecutionStatus.SKIPPED,
-            }:
-                raise ValueError(
-                    f"Node execution '{event.node_id}' cannot complete from "
-                    f"status '{existing_node.status.value}'."
+            if not updated:
+                if existing_node.status not in {
+                    NodeExecutionStatus.COMPLETED,
+                    NodeExecutionStatus.FAILED,
+                    NodeExecutionStatus.SKIPPED,
+                }:
+                    raise ValueError(
+                        f"Node execution '{event.node_id}' cannot complete from "
+                        f"status '{existing_node.status.value}'."
+                    )
+                return TaskCompletionDecision(
+                    event_id=str(event.event_id),
+                    execution_id=str(event.execution_id),
+                    node_id=event.node_id,
+                    outcome=TaskCompletionOutcome.DUPLICATE,
                 )
+
+            ready_node_ids: tuple[str, ...] = ()
+            if event.status is TaskCompletionStatus.COMPLETED:
+                readiness = await WorkflowReadinessService().evaluate_in_transaction(
+                    event.execution_id,
+                    transaction,
+                    execution,
+                )
+                ready_node_ids = readiness.ready_node_ids
+            await WorkflowFinalizationService().evaluate_in_transaction(
+                event.execution_id,
+                transaction,
+                execution,
+            )
+
             return TaskCompletionDecision(
                 event_id=str(event.event_id),
                 execution_id=str(event.execution_id),
                 node_id=event.node_id,
-                outcome=TaskCompletionOutcome.DUPLICATE,
+                outcome=TaskCompletionOutcome.PROCESSED,
+                ready_node_ids=ready_node_ids,
             )
-
-        ready_node_ids: tuple[str, ...] = ()
-        if event.status is TaskCompletionStatus.COMPLETED:
-            readiness = await WorkflowReadinessService().evaluate(event.execution_id, unit_of_work)
-            ready_node_ids = readiness.ready_node_ids
-        await WorkflowFinalizationService().evaluate(event.execution_id, unit_of_work)
-
-        return TaskCompletionDecision(
-            event_id=str(event.event_id),
-            execution_id=str(event.execution_id),
-            node_id=event.node_id,
-            outcome=TaskCompletionOutcome.PROCESSED,
-            ready_node_ids=ready_node_ids,
-        )

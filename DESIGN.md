@@ -101,3 +101,19 @@ configurable idle timeout.
 - Tasks interrupted by a terminated worker can be retried by another worker instance.
 - Reclaimed and newly delivered tasks follow the same bounded-concurrency processing path.
 - The timeout avoids duplicate concurrent execution while allowing recovery from worker failure.
+
+## 10) Concurrent fan-in completion coordination
+
+**Decision:** Serialize completion processing for each workflow execution with a PostgreSQL
+row-level lock on the workflow execution record.
+
+**Why:**
+
+- Multiple branch completions can arrive concurrently and must evaluate readiness from one
+  consistent persisted state.
+- Locking the execution row within the unit-of-work transaction prevents concurrent completion
+  handlers from promoting the same fan-in node more than once.
+- Completion persistence, readiness promotion, and workflow finalization remain authoritative in
+  PostgreSQL, while task dispatch occurs after the transaction commits.
+- The lock is scoped to one execution, so unrelated workflow executions can continue processing
+  concurrently.

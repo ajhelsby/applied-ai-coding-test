@@ -10,7 +10,11 @@ from app.domain.models.workflow import Workflow
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.messaging.task_completion import TaskCompletionEvent, TaskCompletionStatus
 from app.services.node_task_dispatcher import create_task_id
-from app.services.task_completion_service import TaskCompletionOutcome, TaskCompletionService
+from app.services.task_completion_service import (
+    TaskCompletionDecision,
+    TaskCompletionOutcome,
+    TaskCompletionService,
+)
 
 
 class FakeNodeExecutions:
@@ -51,8 +55,13 @@ class FakeNodeExecutions:
 class FakeWorkflowExecutions:
     def __init__(self, execution: WorkflowExecution) -> None:
         self.execution = execution
+        self.completion_lock = asyncio.Lock()
 
     async def get_execution_by_id(self, _execution_id: UUID) -> WorkflowExecution:
+        return self.execution
+
+    async def get_execution_by_id_for_update(self, _execution_id: UUID) -> WorkflowExecution:
+        await self.completion_lock.acquire()
         return self.execution
 
     async def update_status_if_current(
@@ -90,7 +99,11 @@ class FakeUnitOfWork:
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[FakeUnitOfWork]:
-        yield self
+        try:
+            yield self
+        finally:
+            if self.workflow_executions.completion_lock.locked():
+                self.workflow_executions.completion_lock.release()
 
 
 def _workflow(workflow_id: UUID, nodes: list[dict[str, object]]) -> Workflow:
@@ -150,6 +163,52 @@ def test_successful_completion_persists_output_and_promotes_fan_out() -> None:
     assert uow.node_executions.statuses["right"] is NodeExecutionStatus.READY
 
 
+def test_fan_out_terminal_branches_complete_workflow() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
+    workflow = _workflow(
+        execution.workflow_id,
+        [
+            {"id": "root", "handler": "task", "dependencies": []},
+            {"id": "left", "handler": "task", "dependencies": ["root"]},
+            {"id": "right", "handler": "task", "dependencies": ["root"]},
+        ],
+    )
+    uow = FakeUnitOfWork(
+        execution,
+        workflow,
+        {
+            "root": NodeExecutionStatus.RUNNING,
+            "left": NodeExecutionStatus.PENDING,
+            "right": NodeExecutionStatus.PENDING,
+        },
+    )
+
+    root_decision = asyncio.run(
+        TaskCompletionService().process(
+            _event(execution.execution_id, "root", TaskCompletionStatus.COMPLETED), uow
+        )
+    )
+    assert root_decision.ready_node_ids == ("left", "right")
+
+    uow.node_executions.statuses["left"] = NodeExecutionStatus.RUNNING
+    uow.node_executions.statuses["right"] = NodeExecutionStatus.RUNNING
+
+    async def complete_terminal_branches() -> list[TaskCompletionDecision]:
+        decisions = await asyncio.gather(
+            TaskCompletionService().process(
+                _event(execution.execution_id, "left", TaskCompletionStatus.COMPLETED), uow
+            ),
+            TaskCompletionService().process(
+                _event(execution.execution_id, "right", TaskCompletionStatus.COMPLETED), uow
+            ),
+        )
+        return list(decisions)
+
+    asyncio.run(complete_terminal_branches())
+
+    assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.COMPLETED
+
+
 def test_successful_completion_promotes_fan_in_after_all_parents_finish() -> None:
     execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
     workflow = _workflow(
@@ -177,6 +236,43 @@ def test_successful_completion_promotes_fan_in_after_all_parents_finish() -> Non
     )
 
     assert decision.ready_node_ids == ("join",)
+    assert uow.node_executions.statuses["join"] is NodeExecutionStatus.READY
+
+
+def test_concurrent_parent_completions_promote_fan_in_only_once() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
+    workflow = _workflow(
+        execution.workflow_id,
+        [
+            {"id": "left", "handler": "task", "dependencies": []},
+            {"id": "right", "handler": "task", "dependencies": []},
+            {"id": "join", "handler": "task", "dependencies": ["left", "right"]},
+        ],
+    )
+    uow = FakeUnitOfWork(
+        execution,
+        workflow,
+        {
+            "left": NodeExecutionStatus.RUNNING,
+            "right": NodeExecutionStatus.RUNNING,
+            "join": NodeExecutionStatus.PENDING,
+        },
+    )
+
+    async def complete_both_parents() -> list[TaskCompletionDecision]:
+        decisions = await asyncio.gather(
+            TaskCompletionService().process(
+                _event(execution.execution_id, "left", TaskCompletionStatus.COMPLETED), uow
+            ),
+            TaskCompletionService().process(
+                _event(execution.execution_id, "right", TaskCompletionStatus.COMPLETED), uow
+            ),
+        )
+        return list(decisions)
+
+    decisions = asyncio.run(complete_both_parents())
+
+    assert sorted(decision.ready_node_ids for decision in decisions) == [(), ("join",)]
     assert uow.node_executions.statuses["join"] is NodeExecutionStatus.READY
 
 
