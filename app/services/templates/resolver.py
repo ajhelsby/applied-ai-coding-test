@@ -81,12 +81,25 @@ class NodeInputResolver:
                 f"Template references unavailable dependency output '{node_id}'."
             ) from error
 
+        reference_path = f"{node_id}.{'.'.join(reference.path)}"
         for key in reference.path:
-            if not isinstance(current, Mapping) or key not in current:
-                raise TemplateResolutionError(
-                    f"Template references missing output '{node_id}.{'.'.join(reference.path)}'."
-                )
-            current = current[key]
+            if isinstance(current, Mapping):
+                if key not in current:
+                    raise TemplateResolutionError(
+                        f"Template references missing output '{reference_path}'."
+                    )
+                current = current[key]
+                continue
+
+            if isinstance(current, list):
+                if not key.isdecimal() or int(key) >= len(current):
+                    raise TemplateResolutionError(
+                        f"Template references missing output '{reference_path}'."
+                    )
+                current = current[int(key)]
+                continue
+
+            raise TemplateResolutionError(f"Template references missing output '{reference_path}'.")
         return current
 
     def _interpolate_segments(

@@ -6,11 +6,13 @@ from contextlib import asynccontextmanager
 from json import loads
 from uuid import UUID, uuid4
 
+import pytest
 from redis.exceptions import ConnectionError
 
 from app.domain.models.execution import NodeExecution, WorkflowExecution
 from app.domain.models.node import WorkflowNode
 from app.domain.state.states import NodeExecutionStatus
+from app.domain.templates.parser import TemplateResolutionError
 from app.services.node_task_dispatcher import (
     DispatchOutcome,
     RedisNodeTaskDispatcher,
@@ -23,15 +25,17 @@ class FakeNodeExecutions:
         self,
         statuses: dict[str, NodeExecutionStatus],
         outputs: dict[str, dict[str, object]] | None = None,
+        execution_ids: dict[str, UUID] | None = None,
     ) -> None:
         self.statuses = statuses
         self.outputs = {} if outputs is None else outputs
+        self.execution_ids = {} if execution_ids is None else execution_ids
         self.update_calls: list[tuple[str, NodeExecutionStatus, NodeExecutionStatus]] = []
 
     async def get_node_executions_for_execution(self, execution_id: UUID) -> list[NodeExecution]:
         return [
             NodeExecution(
-                workflow_execution_id=execution_id,
+                workflow_execution_id=self.execution_ids.get(node_id, execution_id),
                 node_id=node_id,
                 status=status,
                 output_data=self.outputs.get(node_id, {}),
@@ -194,6 +198,116 @@ def test_dispatch_resolves_templates_from_completed_dependency_outputs() -> None
         "post_count": 2,
         "description": "Found 2 posts.",
     }
+
+
+@pytest.mark.parametrize(
+    "dependency_status",
+    [NodeExecutionStatus.READY, NodeExecutionStatus.FAILED],
+)
+def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
+    dependency_status: NodeExecutionStatus,
+) -> None:
+    execution = make_execution()
+    node = WorkflowNode(
+        id="summarize",
+        handler="example.handler",
+        dependencies=["get_user"],
+        config={"user_id": "{{ get_user.id }}"},
+    )
+    node_executions = FakeNodeExecutions(
+        {
+            "get_user": dependency_status,
+            node.id: NodeExecutionStatus.READY,
+        },
+        outputs={"get_user": {"id": 123}},
+    )
+    published: list[dict[str, str]] = []
+
+    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
+        published.append(fields)
+        return "1-0"
+
+    with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
+        asyncio.run(
+            RedisNodeTaskDispatcher(publish_task).dispatch(
+                execution,
+                node,
+                FakeUnitOfWork(node_executions),
+            )
+        )
+
+    assert published == []
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
+    assert node_executions.update_calls == []
+
+
+def test_dispatch_does_not_resolve_outputs_from_another_execution() -> None:
+    execution = make_execution()
+    node = WorkflowNode(
+        id="summarize",
+        handler="example.handler",
+        dependencies=["get_user"],
+        config={"user_id": "{{ get_user.id }}"},
+    )
+    node_executions = FakeNodeExecutions(
+        {
+            "get_user": NodeExecutionStatus.COMPLETED,
+            node.id: NodeExecutionStatus.READY,
+        },
+        outputs={"get_user": {"id": 123}},
+        execution_ids={"get_user": uuid4()},
+    )
+    published: list[dict[str, str]] = []
+
+    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
+        published.append(fields)
+        return "1-0"
+
+    with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
+        asyncio.run(
+            RedisNodeTaskDispatcher(publish_task).dispatch(
+                execution,
+                node,
+                FakeUnitOfWork(node_executions),
+            )
+        )
+
+    assert published == []
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
+
+
+def test_dispatch_does_not_publish_when_output_path_is_missing() -> None:
+    execution = make_execution()
+    node = WorkflowNode(
+        id="summarize",
+        handler="example.handler",
+        dependencies=["get_user"],
+        config={"user_name": "{{ get_user.profile.name }}"},
+    )
+    node_executions = FakeNodeExecutions(
+        {
+            "get_user": NodeExecutionStatus.COMPLETED,
+            node.id: NodeExecutionStatus.READY,
+        },
+        outputs={"get_user": {"profile": {}}},
+    )
+    published: list[dict[str, str]] = []
+
+    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
+        published.append(fields)
+        return "1-0"
+
+    with pytest.raises(TemplateResolutionError, match="missing output"):
+        asyncio.run(
+            RedisNodeTaskDispatcher(publish_task).dispatch(
+                execution,
+                node,
+                FakeUnitOfWork(node_executions),
+            )
+        )
+
+    assert published == []
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
 
 
 def test_dispatch_aggregates_completed_fan_in_dependencies_for_output_node() -> None:
