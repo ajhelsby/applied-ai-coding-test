@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -33,3 +34,10 @@ class NodeExecutionRepository(Protocol):
         completed_at: datetime | None = None,
     ) -> bool:
         """Update node status only if current status matches expected status."""
+
+    async def claim_pending_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        """Atomically promote pending nodes to ready and return claimed node IDs."""

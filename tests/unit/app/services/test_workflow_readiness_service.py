@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
@@ -17,7 +17,7 @@ from app.services.workflow_readiness_service import WorkflowReadinessService
 class FakeNodeExecutions:
     def __init__(self, statuses: dict[str, NodeExecutionStatus]) -> None:
         self.statuses = dict(statuses)
-        self.update_calls: list[tuple[str, NodeExecutionStatus, NodeExecutionStatus]] = []
+        self.claim_calls: list[tuple[UUID, tuple[str, ...]]] = []
 
     async def get_node_executions_for_execution(self, execution_id: UUID) -> list[NodeExecution]:
         return [
@@ -43,6 +43,22 @@ class FakeNodeExecutions:
             return False
         self.statuses[node_id] = new_status
         return True
+
+    async def claim_pending_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        candidate_ids = tuple(node_ids)
+        self.claim_calls.append((execution_id, candidate_ids))
+        claimed_ids = tuple(
+            node_id
+            for node_id in candidate_ids
+            if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
+        )
+        for node_id in claimed_ids:
+            self.statuses[node_id] = NodeExecutionStatus.READY
+        return claimed_ids
 
 
 class FakeWorkflowExecutions:
@@ -133,9 +149,7 @@ def test_evaluate_does_not_reidentify_started_or_processed_nodes() -> None:
     decision = asyncio.run(WorkflowReadinessService().evaluate(execution.execution_id, uow))
 
     assert decision.ready_node_ids == ("d",)
-    assert uow.node_executions.update_calls == [
-        ("d", NodeExecutionStatus.PENDING, NodeExecutionStatus.READY)
-    ]
+    assert uow.node_executions.claim_calls == [(execution.execution_id, ("d",))]
 
 
 def test_evaluate_is_repeatable_and_safe_to_call_multiple_times() -> None:
