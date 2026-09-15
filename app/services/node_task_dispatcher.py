@@ -18,7 +18,7 @@ from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
 from app.messaging.redis.streams import WORKFLOW_TASKS_STREAM, publish
 from app.messaging.task_messages import NodeTaskMessage
-from app.services.template_resolution import NodeInputResolver
+from app.services.templates.resolver import NodeInputResolver
 
 TASK_ID_NAMESPACE = UUID("1f3cd7dd-05c9-48e9-9ad3-95520ee7ae8d")
 TaskPublisher = Callable[[str, dict[str, str]], Awaitable[str]]

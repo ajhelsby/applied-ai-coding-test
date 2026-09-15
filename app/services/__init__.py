@@ -1,5 +1,6 @@
 """Application services coordinating domain use cases."""
 
+from app.domain.templates.parser import TemplateResolutionError
 from app.services.node_task_dispatcher import (
     DispatchOutcome,
     DispatchResult,
@@ -12,7 +13,7 @@ from app.services.task_completion_service import (
     TaskCompletionOutcome,
     TaskCompletionService,
 )
-from app.services.template_resolution import NodeInputResolver, TemplateResolutionError
+from app.services.templates.resolver import NodeInputResolver
 from app.services.workflow_definition_service import WorkflowDefinitionService
 from app.services.workflow_dispatch_service import (
     WorkflowDispatchDecision,

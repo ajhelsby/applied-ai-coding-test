@@ -32,12 +32,14 @@ packages = [
   "app.domain.models",
   "app.domain.repositories",
   "app.domain.state",
+  "app.domain.templates",
   "app.domain.validation",
   "app.domain.validation.rules",
   "app.messaging",
   "app.messaging.redis",
   "app.orchestrator",
   "app.services",
+  "app.services.templates",
   "app.worker",
 ]
 
