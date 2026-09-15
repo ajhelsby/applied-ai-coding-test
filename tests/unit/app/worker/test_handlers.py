@@ -111,7 +111,7 @@ def test_external_service_handler_awaits_configured_latency(
         delays.append(delay)
 
     monkeypatch.setenv("MOCK_EXTERNAL_SERVICE_LATENCY_MS", "1250")
-    monkeypatch.setattr("app.worker.handlers.external_service.asyncio.sleep", sleep)
+    monkeypatch.setattr("app.worker.handlers.mock_external_service.asyncio.sleep", sleep)
 
     asyncio.run(
         WorkerTaskExecutor().execute(

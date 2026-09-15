@@ -25,6 +25,13 @@ from app.domain.state.state_machine import (
     validate_workflow_transition,
 )
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
+from app.domain.templates import (
+    ParsedTemplateString,
+    TemplateParser,
+    TemplateReference,
+    TemplateResolutionError,
+    TemplateSegment,
+)
 from app.domain.validation.validator import (
     DefaultWorkflowRuleProvider,
     WorkflowRuleProvider,
@@ -38,6 +45,7 @@ __all__ = [
     "NodeExecutionStatus",
     "NODE_TRANSITIONS",
     "NodeReference",
+    "ParsedTemplateString",
     "DAG",
     "DAGNode",
     "InvalidNodeTransitionError",
@@ -51,6 +59,10 @@ __all__ = [
     "WorkflowExecutionStatus",
     "WorkflowRepository",
     "WorkflowValidationError",
+    "TemplateParser",
+    "TemplateReference",
+    "TemplateResolutionError",
+    "TemplateSegment",
     "WorkflowRuleProvider",
     "WorkflowValidationRule",
     "WorkflowValidator",

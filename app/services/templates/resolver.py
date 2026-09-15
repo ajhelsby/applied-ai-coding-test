@@ -3,24 +3,23 @@
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Mapping
 
 from app.domain.models.json import JsonValue
 from app.domain.models.node import WorkflowNode
-
-_TEMPLATE_PATTERN = re.compile(
-    r"\{\{\s*(?P<node_id>[A-Za-z][A-Za-z0-9_-]*)\."
-    r"(?P<path>[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*)\s*\}\}"
+from app.domain.templates.parser import (
+    ParsedTemplateString,
+    TemplateParser,
+    TemplateReference,
+    TemplateResolutionError,
 )
-
-
-class TemplateResolutionError(ValueError):
-    """Raised when a task input template cannot be resolved safely."""
 
 
 class NodeInputResolver:
     """Build JSON-safe worker input from node configuration and completed outputs."""
+
+    def __init__(self, parser: TemplateParser | None = None) -> None:
+        self._parser = parser or TemplateParser()
 
     def resolve(
         self,
@@ -62,21 +61,19 @@ class NodeInputResolver:
         value: str,
         dependency_outputs: Mapping[str, JsonValue],
     ) -> JsonValue:
-        full_match = _TEMPLATE_PATTERN.fullmatch(value)
-        if full_match is not None:
-            return self._copy_json_value(self._lookup(full_match, dependency_outputs))
-
-        return _TEMPLATE_PATTERN.sub(
-            lambda match: self._interpolate(match, dependency_outputs),
-            value,
-        )
+        parsed = self._parser.parse(value)
+        if isinstance(parsed, str):
+            return parsed
+        if isinstance(parsed, TemplateReference):
+            return self._copy_json_value(self._lookup(parsed, dependency_outputs))
+        return self._interpolate_segments(parsed, dependency_outputs)
 
     def _lookup(
         self,
-        match: re.Match[str],
+        reference: TemplateReference,
         dependency_outputs: Mapping[str, JsonValue],
     ) -> JsonValue:
-        node_id = match["node_id"]
+        node_id = reference.node_id
         try:
             current: JsonValue = dependency_outputs[node_id]
         except KeyError as error:
@@ -84,20 +81,30 @@ class NodeInputResolver:
                 f"Template references unavailable dependency output '{node_id}'."
             ) from error
 
-        for key in match["path"].split("."):
+        for key in reference.path:
             if not isinstance(current, Mapping) or key not in current:
                 raise TemplateResolutionError(
-                    f"Template references missing output '{node_id}.{match['path']}'."
+                    f"Template references missing output '{node_id}.{'.'.join(reference.path)}'."
                 )
             current = current[key]
         return current
 
-    def _interpolate(
+    def _interpolate_segments(
         self,
-        match: re.Match[str],
+        segments: ParsedTemplateString,
         dependency_outputs: Mapping[str, JsonValue],
     ) -> str:
-        resolved = self._lookup(match, dependency_outputs)
+        return "".join(
+            segment if isinstance(segment, str) else self._interpolate(segment, dependency_outputs)
+            for segment in segments
+        )
+
+    def _interpolate(
+        self,
+        reference: TemplateReference,
+        dependency_outputs: Mapping[str, JsonValue],
+    ) -> str:
+        resolved = self._lookup(reference, dependency_outputs)
         if isinstance(resolved, str):
             return resolved
         if resolved is None:
@@ -108,7 +115,7 @@ class NodeInputResolver:
             return str(resolved)
         raise TemplateResolutionError(
             "Embedded templates must resolve to scalar JSON values; "
-            f"'{match.group(0)}' resolved to a structured value."
+            f"'{reference.node_id}.{'.'.join(reference.path)}' resolved to a structured value."
         )
 
     @classmethod
