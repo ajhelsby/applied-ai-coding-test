@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
@@ -11,6 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.domain.models.json import JsonValue
 from app.infrastructure.persistence.models.base import Base
 
 
@@ -26,7 +26,7 @@ class NodeExecutionRecord(Base):
     )
     node_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    output_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    output_data: Mapped[JsonValue] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

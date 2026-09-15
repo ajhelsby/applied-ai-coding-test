@@ -128,6 +128,38 @@ def test_get_workflow_execution_results_exposes_completed_output_node_payload() 
     }
 
 
+def test_get_workflow_execution_results_preserves_array_and_null_output() -> None:
+    execution = WorkflowExecution(
+        workflow_id=uuid4(),
+        status=WorkflowExecutionStatus.COMPLETED,
+    )
+    array_node = NodeExecution(
+        workflow_execution_id=execution.execution_id,
+        node_id="array",
+        status=NodeExecutionStatus.COMPLETED,
+        output_data=[{"items": [1, 2, 3]}],
+    )
+    null_node = NodeExecution(
+        workflow_execution_id=execution.execution_id,
+        node_id="null",
+        status=NodeExecutionStatus.COMPLETED,
+        output_data=None,
+    )
+    unit_of_work = InMemoryUnitOfWork([execution], [array_node, null_node])
+    app.dependency_overrides[get_unit_of_work] = lambda: unit_of_work
+    try:
+        response = client.get(f"/workflows/{execution.execution_id}/results")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert results is not None
+    results_by_node_id = {item["node_id"]: item["output_data"] for item in results}
+    assert results_by_node_id["array"] == [{"items": [1, 2, 3]}]
+    assert results_by_node_id["null"] is None
+
+
 def test_get_workflow_execution_results_returns_pending_without_results() -> None:
     execution = WorkflowExecution(
         workflow_id=uuid4(),

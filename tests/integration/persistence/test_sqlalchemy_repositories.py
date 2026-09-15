@@ -79,6 +79,34 @@ def test_persists_and_retrieves_workflow_execution_and_nodes(
     asyncio.run(scenario())
 
 
+def test_persists_and_retrieves_null_node_output(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async def scenario() -> None:
+        workflow = Workflow(name="empty-output")
+        execution = WorkflowExecution(workflow_id=workflow.workflow_id)
+        node_execution = NodeExecution(
+            workflow_execution_id=execution.execution_id,
+            node_id="no-result",
+            output_data=None,
+        )
+        uow = SqlAlchemyUnitOfWork(session_factory)
+
+        async with uow.transaction() as transaction:
+            await transaction.workflows.create_workflow(workflow)
+            await transaction.workflow_executions.create_execution(execution)
+            await transaction.node_executions.upsert_node_execution(node_execution)
+
+        async with uow.transaction() as transaction:
+            persisted_nodes = await transaction.node_executions.get_node_executions_for_execution(
+                execution.execution_id
+            )
+
+        assert persisted_nodes[0].output_data is None
+
+    asyncio.run(scenario())
+
+
 def test_updates_execution_states_only_when_expected_status_matches(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

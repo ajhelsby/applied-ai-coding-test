@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.models.json import JsonValue
 from app.domain.state.state_machine import (
     validate_node_transition,
     validate_workflow_transition,
@@ -43,7 +44,7 @@ class NodeExecution(BaseModel):
     workflow_execution_id: UUID
     node_id: str = Field(min_length=1)
     status: NodeExecutionStatus = NodeExecutionStatus.PENDING
-    output_data: dict[str, Any] = Field(default_factory=dict)
+    output_data: JsonValue = Field(default_factory=dict)
     error_message: str | None = None
     error_type: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

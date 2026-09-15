@@ -5,7 +5,10 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
+import pytest
+
 from app.domain.models.execution import NodeExecution, WorkflowExecution
+from app.domain.models.json import JsonValue
 from app.domain.models.workflow import Workflow
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.messaging.task_completion import TaskCompletionEvent, TaskCompletionStatus
@@ -20,12 +23,18 @@ from app.services.task_completion_service import (
 class FakeNodeExecutions:
     def __init__(self, statuses: dict[str, NodeExecutionStatus]) -> None:
         self.statuses = dict(statuses)
-        self.outputs: dict[str, dict[str, object]] = {}
+        self.outputs: dict[str, JsonValue] = {}
         self.errors: dict[str, tuple[str | None, str | None]] = {}
+        self.fail_updates = False
 
     async def get_node_executions_for_execution(self, execution_id: UUID) -> list[NodeExecution]:
         return [
-            NodeExecution(workflow_execution_id=execution_id, node_id=node_id, status=status)
+            NodeExecution(
+                workflow_execution_id=execution_id,
+                node_id=node_id,
+                status=status,
+                output_data=self.outputs.get(node_id, {}),
+            )
             for node_id, status in self.statuses.items()
         ]
 
@@ -36,17 +45,18 @@ class FakeNodeExecutions:
         expected_current_status: NodeExecutionStatus,
         new_status: NodeExecutionStatus,
         *,
-        output_data: dict[str, object] | None = None,
+        output_data: JsonValue = None,
         error_message: str | None = None,
         error_type: str | None = None,
         **_kwargs: object,
     ) -> bool:
         del execution_id
+        if self.fail_updates:
+            raise RuntimeError("node persistence failed")
         if self.statuses.get(node_id) is not expected_current_status:
             return False
         self.statuses[node_id] = new_status
-        if output_data is not None:
-            self.outputs[node_id] = output_data
+        self.outputs[node_id] = output_data
         if error_message is not None or error_type is not None:
             self.errors[node_id] = (error_message, error_type)
         return True
@@ -175,6 +185,32 @@ def test_successful_completion_persists_output_and_promotes_fan_out() -> None:
     assert uow.node_executions.outputs["root"] == {"result": "ok"}
     assert uow.node_executions.statuses["left"] is NodeExecutionStatus.READY
     assert uow.node_executions.statuses["right"] is NodeExecutionStatus.READY
+
+
+def test_successful_completion_persists_null_output() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
+    workflow = _workflow(
+        execution.workflow_id, [{"id": "node", "handler": "task", "dependencies": []}]
+    )
+    uow = FakeUnitOfWork(execution, workflow, {"node": NodeExecutionStatus.RUNNING})
+
+    decision = asyncio.run(
+        TaskCompletionService().process(
+            TaskCompletionEvent(
+                event_id=uuid4(),
+                task_id=create_task_id(execution.execution_id, "node"),
+                execution_id=execution.execution_id,
+                node_id="node",
+                status=TaskCompletionStatus.COMPLETED,
+                output_data=None,
+            ),
+            uow,
+        )
+    )
+
+    assert decision.outcome is TaskCompletionOutcome.PROCESSED
+    assert uow.node_executions.statuses["node"] is NodeExecutionStatus.COMPLETED
+    assert uow.node_executions.outputs["node"] is None
 
 
 def test_fan_out_terminal_branches_complete_workflow() -> None:
@@ -314,6 +350,7 @@ def test_failed_completion_persists_error_and_fails_workflow() -> None:
     assert decision.outcome is TaskCompletionOutcome.PROCESSED
     assert decision.ready_node_ids == ()
     assert uow.node_executions.statuses["root"] is NodeExecutionStatus.FAILED
+    assert uow.node_executions.outputs["root"] is None
     assert uow.node_executions.errors["root"] == ("handler failed", "RuntimeError")
     assert uow.node_executions.statuses["child"] is NodeExecutionStatus.PENDING
     assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.FAILED
@@ -325,6 +362,7 @@ def test_duplicate_completion_is_a_no_op() -> None:
         execution.workflow_id, [{"id": "node", "handler": "task", "dependencies": []}]
     )
     uow = FakeUnitOfWork(execution, workflow, {"node": NodeExecutionStatus.COMPLETED})
+    uow.node_executions.outputs["node"] = {"valid": {"items": [1, 2]}}
 
     decision = asyncio.run(
         TaskCompletionService().process(
@@ -334,6 +372,26 @@ def test_duplicate_completion_is_a_no_op() -> None:
 
     assert decision.outcome is TaskCompletionOutcome.DUPLICATE
     assert decision.ready_node_ids == ()
+    assert uow.node_executions.outputs == {"node": {"valid": {"items": [1, 2]}}}
+
+
+def test_completion_persistence_failure_does_not_finalize_node_or_workflow() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
+    workflow = _workflow(
+        execution.workflow_id, [{"id": "node", "handler": "task", "dependencies": []}]
+    )
+    uow = FakeUnitOfWork(execution, workflow, {"node": NodeExecutionStatus.RUNNING})
+    uow.node_executions.fail_updates = True
+
+    with pytest.raises(RuntimeError, match="node persistence failed"):
+        asyncio.run(
+            TaskCompletionService().process(
+                _event(execution.execution_id, "node", TaskCompletionStatus.COMPLETED), uow
+            )
+        )
+
+    assert uow.node_executions.statuses["node"] is NodeExecutionStatus.RUNNING
+    assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.RUNNING
     assert uow.node_executions.outputs == {}
 
 

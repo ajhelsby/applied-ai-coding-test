@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_serializer
 
+from app.domain.models.json import JsonValue
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 
 
@@ -98,7 +98,7 @@ class WorkflowResultNodeResponseItem(BaseModel):
 
     node_id: str
     status: NodeExecutionStatus
-    output_data: dict[str, Any]
+    output_data: JsonValue
     error_message: str | None
     error_type: str | None
     created_at: datetime

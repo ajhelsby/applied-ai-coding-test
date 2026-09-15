@@ -8,7 +8,8 @@ from enum import StrEnum
 from json import dumps
 from uuid import UUID
 
-from app.messaging.stream_fields import json_object_field, required_field
+from app.domain.models.json import JsonValue
+from app.messaging.stream_fields import json_value_field, required_field
 
 
 class TaskCompletionStatus(StrEnum):
@@ -27,7 +28,7 @@ class TaskCompletionEvent:
     execution_id: UUID
     node_id: str
     status: TaskCompletionStatus
-    output_data: dict[str, object] | None = None
+    output_data: JsonValue = None
     error_message: str | None = None
     error_type: str | None = None
 
@@ -42,8 +43,6 @@ class TaskCompletionEvent:
             "status": self.status.value,
         }
         if self.status is TaskCompletionStatus.COMPLETED:
-            if self.output_data is None:
-                raise ValueError("Completed task completion events require output_data.")
             return {
                 **fields,
                 "output_data": dumps(self.output_data, separators=(",", ":"), sort_keys=True),
@@ -67,7 +66,7 @@ class TaskCompletionEvent:
         status = TaskCompletionStatus(required_field(fields, "status", "Task completion event"))
 
         if status is TaskCompletionStatus.COMPLETED:
-            output_data = json_object_field(fields, "output_data", "Task completion event")
+            output_data = json_value_field(fields, "output_data", "Task completion event")
             return cls(
                 event_id=event_id,
                 task_id=task_id,
