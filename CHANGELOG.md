@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.5](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.4...v0.0.5) (2026-09-15)
+
+
+### Features
+
+* **#20:** Implement row-level locking for workflow execution retrieval to ensure concurrency safety ([#73](https://github.com/ajhelsby/applied-ai-coding-test/issues/73)) ([78d2aaa](https://github.com/ajhelsby/applied-ai-coding-test/commit/78d2aaae39675a38381054deb3016e24dd228443))
+* **#21:** Add claim_pending_nodes method to repository and services for atomic node claiming ([#75](https://github.com/ajhelsby/applied-ai-coding-test/issues/75)) ([1999412](https://github.com/ajhelsby/applied-ai-coding-test/commit/199941257fa0e221291ceddb80ae5fe97fdb3942))
+* **#22:** Allow node output data to be null and update related model… ([#76](https://github.com/ajhelsby/applied-ai-coding-test/issues/76)) ([7bd08ff](https://github.com/ajhelsby/applied-ai-coding-test/commit/7bd08ffee62c4baaa58bb500c6824fc5b47cf139))
+* **#23:** Add template parser ([#77](https://github.com/ajhelsby/applied-ai-coding-test/issues/77)) ([f769579](https://github.com/ajhelsby/applied-ai-coding-test/commit/f769579537311a2b326984be884b205883a3f5c9))
+
 ## [0.0.4](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.3...v0.0.4) (2026-09-14)
 
 
