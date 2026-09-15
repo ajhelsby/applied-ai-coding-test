@@ -19,6 +19,9 @@ class WorkflowExecutionRepository(Protocol):
     async def get_execution_by_id(self, execution_id: UUID) -> WorkflowExecution | None:
         """Retrieve a workflow execution by ID."""
 
+    async def get_execution_by_id_for_update(self, execution_id: UUID) -> WorkflowExecution | None:
+        """Retrieve and lock a workflow execution until the current transaction completes."""
+
     async def update_status_if_current(
         self,
         execution_id: UUID,

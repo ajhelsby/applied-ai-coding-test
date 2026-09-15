@@ -55,6 +55,28 @@ class SqlAlchemyWorkflowExecutionRepository(WorkflowExecutionRepository):
             }
         )
 
+    async def get_execution_by_id_for_update(self, execution_id: UUID) -> WorkflowExecution | None:
+        result = await self._session.execute(
+            select(WorkflowExecutionRecord)
+            .where(WorkflowExecutionRecord.execution_id == execution_id)
+            .with_for_update()
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            return None
+
+        return WorkflowExecution.model_validate(
+            {
+                "execution_id": record.execution_id,
+                "workflow_id": record.workflow_id,
+                "status": WorkflowExecutionStatus(record.status),
+                "input_data": record.input_data,
+                "created_at": record.created_at,
+                "started_at": record.started_at,
+                "completed_at": record.completed_at,
+            }
+        )
+
     async def update_status_if_current(
         self,
         execution_id: UUID,

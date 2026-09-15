@@ -7,6 +7,7 @@ from uuid import UUID
 
 from app.domain.dag import evaluate_ready_node_ids
 from app.domain.errors.transitions import WorkflowExecutionNotFoundError
+from app.domain.models.execution import WorkflowExecution
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
 
@@ -34,26 +35,50 @@ class WorkflowReadinessService:
             if execution is None:
                 raise WorkflowExecutionNotFoundError(str(execution_id))
 
-            workflow = await transaction.workflows.get_workflow_by_id(execution.workflow_id)
-            if workflow is None:
-                raise LookupError(f"Workflow '{execution.workflow_id}' was not found.")
+            decision = await self.evaluate_in_transaction(
+                execution_id,
+                transaction,
+                execution,
+            )
+        return decision
 
-            node_executions = await transaction.node_executions.get_node_executions_for_execution(
+    async def evaluate_in_transaction(
+        self,
+        execution_id: UUID,
+        transaction: UnitOfWork,
+        execution: WorkflowExecution | None = None,
+    ) -> WorkflowReadinessDecision:
+        """Evaluate readiness inside an existing transaction."""
+
+        if execution is None:
+            persisted_execution = await transaction.workflow_executions.get_execution_by_id(
                 execution_id
             )
-            node_statuses_by_id = {item.node_id: item.status for item in node_executions}
+        else:
+            persisted_execution = execution
+        if persisted_execution is None:
+            raise WorkflowExecutionNotFoundError(str(execution_id))
 
-            evaluated_ready_node_ids = evaluate_ready_node_ids(workflow, node_statuses_by_id)
-            promoted_ready_node_ids: list[str] = []
-            for node_id in evaluated_ready_node_ids:
-                promoted = await transaction.node_executions.update_status_if_current(
-                    execution_id=execution_id,
-                    node_id=node_id,
-                    expected_current_status=NodeExecutionStatus.PENDING,
-                    new_status=NodeExecutionStatus.READY,
-                )
-                if promoted:
-                    promoted_ready_node_ids.append(node_id)
+        workflow = await transaction.workflows.get_workflow_by_id(persisted_execution.workflow_id)
+        if workflow is None:
+            raise LookupError(f"Workflow '{persisted_execution.workflow_id}' was not found.")
+
+        node_executions = await transaction.node_executions.get_node_executions_for_execution(
+            execution_id
+        )
+        node_statuses_by_id = {item.node_id: item.status for item in node_executions}
+
+        evaluated_ready_node_ids = evaluate_ready_node_ids(workflow, node_statuses_by_id)
+        promoted_ready_node_ids: list[str] = []
+        for node_id in evaluated_ready_node_ids:
+            promoted = await transaction.node_executions.update_status_if_current(
+                execution_id=execution_id,
+                node_id=node_id,
+                expected_current_status=NodeExecutionStatus.PENDING,
+                new_status=NodeExecutionStatus.READY,
+            )
+            if promoted:
+                promoted_ready_node_ids.append(node_id)
 
         return WorkflowReadinessDecision(
             execution_id=execution_id,
