@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -113,3 +114,26 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
             .returning(NodeExecutionRecord.workflow_execution_id)
         )
         return result.scalar_one_or_none() is not None
+
+    async def claim_pending_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        """Atomically promote pending nodes to ready and return claimed node IDs."""
+
+        if not node_ids:
+            return ()
+
+        result = await self._session.execute(
+            update(NodeExecutionRecord)
+            .where(NodeExecutionRecord.workflow_execution_id == execution_id)
+            .where(NodeExecutionRecord.node_id.in_(node_ids))
+            .where(NodeExecutionRecord.status == NodeExecutionStatus.PENDING.value)
+            .values(
+                status=NodeExecutionStatus.READY.value,
+                updated_at=func.now(),
+            )
+            .returning(NodeExecutionRecord.node_id)
+        )
+        return tuple(result.scalars().all())

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
@@ -50,6 +50,20 @@ class FakeNodeExecutions:
         if error_message is not None or error_type is not None:
             self.errors[node_id] = (error_message, error_type)
         return True
+
+    async def claim_pending_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        claimed_ids = tuple(
+            node_id
+            for node_id in node_ids
+            if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
+        )
+        for node_id in claimed_ids:
+            self.statuses[node_id] = NodeExecutionStatus.READY
+        return claimed_ids
 
 
 class FakeWorkflowExecutions:

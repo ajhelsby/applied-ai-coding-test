@@ -195,6 +195,71 @@ def test_locks_workflow_execution_until_transaction_completes(
     asyncio.run(scenario())
 
 
+def test_concurrent_pending_node_claims_promote_node_only_once(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async def scenario() -> None:
+        workflow = Workflow(name="node-claim-lock")
+        execution = WorkflowExecution(workflow_id=workflow.workflow_id)
+        node_execution = NodeExecution(
+            workflow_execution_id=execution.execution_id,
+            node_id="claimable",
+        )
+        setup_uow = SqlAlchemyUnitOfWork(session_factory)
+
+        async with setup_uow.transaction() as transaction:
+            await transaction.workflows.create_workflow(workflow)
+            await transaction.workflow_executions.create_execution(execution)
+            await transaction.node_executions.upsert_node_execution(node_execution)
+
+        first_claimed = asyncio.Event()
+        second_claimed = asyncio.Event()
+        release_first = asyncio.Event()
+        claim_results: list[tuple[str, ...]] = []
+
+        async def claim_and_hold() -> None:
+            uow = SqlAlchemyUnitOfWork(session_factory)
+            async with uow.transaction() as transaction:
+                claim_results.append(
+                    await transaction.node_executions.claim_pending_nodes(
+                        execution.execution_id,
+                        ("claimable",),
+                    )
+                )
+                first_claimed.set()
+                await release_first.wait()
+
+        async def claim_concurrently() -> None:
+            uow = SqlAlchemyUnitOfWork(session_factory)
+            async with uow.transaction() as transaction:
+                claim_results.append(
+                    await transaction.node_executions.claim_pending_nodes(
+                        execution.execution_id,
+                        ("claimable",),
+                    )
+                )
+                second_claimed.set()
+
+        first_task = asyncio.create_task(claim_and_hold())
+        await asyncio.wait_for(first_claimed.wait(), timeout=1)
+        second_task = asyncio.create_task(claim_concurrently())
+        await asyncio.sleep(0)
+        assert not second_claimed.is_set()
+
+        release_first.set()
+        await asyncio.wait_for(asyncio.gather(first_task, second_task), timeout=1)
+
+        assert sorted(claim_results) == [(), ("claimable",)]
+
+        async with SqlAlchemyUnitOfWork(session_factory).transaction() as transaction:
+            persisted_nodes = await transaction.node_executions.get_node_executions_for_execution(
+                execution.execution_id
+            )
+            assert persisted_nodes[0].status is NodeExecutionStatus.READY
+
+    asyncio.run(scenario())
+
+
 def test_rolls_back_related_writes_when_a_transaction_fails(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
