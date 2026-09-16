@@ -24,6 +24,53 @@ jobs:
       - name: Lint and Test
         uses: ./.github/actions/lint-and-test
 
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgresql:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: applied_ai_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d applied_ai_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install uv and dependencies
+        run: |
+          pip install uv
+          uv sync
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/applied_ai_db
+          REDIS_URL: redis://localhost:6379/15
+          PYTHONPATH: .
+        run: uv run pytest -q tests/integration
+
 #  docker-compose-build-and-test:
 #    name: Build and Test Docker image
 #    runs-on: namespace-profile-api

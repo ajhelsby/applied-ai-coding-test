@@ -69,6 +69,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     log_level = os.getenv("LOG_LEVEL", "INFO")
+    logging.basicConfig(level=log_level)
     print(f"orchestrator started (LOG_LEVEL={log_level})", flush=True)
     try:
         asyncio.run(run())

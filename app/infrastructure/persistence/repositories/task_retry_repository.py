@@ -43,7 +43,7 @@ class SqlAlchemyTaskRetryRepository(TaskRetryRepository):
             raise ValueError(f"Attempt '{attempt_id}' does not belong to task '{task_id}'.")
         if attempt.completion_event_id == completion_event_id:
             return False
-        if attempt.status in {"completed", "failed"}:
+        if attempt.status in {"completed", "failed"} and attempt.completion_event_id is not None:
             return False
         await self._session.execute(
             update(TaskAttemptRecord)
@@ -201,6 +201,10 @@ class SqlAlchemyTaskRetryRepository(TaskRetryRepository):
             select(
                 LogicalTaskRecord,
                 TaskAttemptRecord,
+            )
+            .join(
+                TaskAttemptRecord,
+                TaskAttemptRecord.task_id == LogicalTaskRecord.task_id,
             )
             .join(
                 TaskRetryDispatchRecord,

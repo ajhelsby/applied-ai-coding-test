@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.domain.models.execution import NodeExecution, WorkflowExecution
 from app.domain.models.node import WorkflowNode
@@ -17,21 +17,20 @@ from app.domain.models.workflow import Workflow, WorkflowDag
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
 from app.infrastructure.persistence.models.outbox_event import OutboxEventRecord
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from tests.integration.fixtures.infrastructure import InfrastructureConfig
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not DATABASE_URL,
-        reason="DATABASE_URL is required to run PostgreSQL persistence integration tests.",
-    ),
-]
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def session_factory() -> Iterator[async_sessionmaker[AsyncSession]]:
-    """Create a connection factory for the compose PostgreSQL database."""
-    engine = create_async_engine(DATABASE_URL)
+def session_factory(
+    integration_infrastructure: InfrastructureConfig,
+) -> Iterator[async_sessionmaker[AsyncSession]]:
+    """Create a connection factory for the selected PostgreSQL instance."""
+    engine = create_async_engine(
+        integration_infrastructure.database_url,
+        poolclass=NullPool,
+    )
     yield async_sessionmaker(engine, expire_on_commit=False)
     asyncio.run(engine.dispose())
 

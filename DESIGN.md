@@ -135,3 +135,17 @@ task's deterministic `task_id`.
   be acknowledged safely without invoking the handler again.
 - PostgreSQL remains the authoritative source for idempotency state; Redis is used only as the
   asynchronous transport.
+
+## 12) Integration service lifecycle
+
+**Decision:** Run the Orchestrator and Worker as subprocesses during integration tests.
+
+**Why:**
+
+- This most closely matches the production execution model and validates real process boundaries.
+- Each service receives the same environment-driven PostgreSQL and Redis configuration used in
+  deployment.
+- Separate processes avoid event-loop ownership and shared-global-state issues in pytest.
+- Process output can be captured and included in timeout diagnostics.
+- Explicit startup and teardown make service failures and resource leaks visible.
+- The same lifecycle works with either externally supplied infrastructure or Testcontainers.

@@ -6,7 +6,7 @@ from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
-database_url = os.getenv("DATABASE_URL")
+database_url = os.getenv("ALEMBIC_DATABASE_URL") or os.getenv("DATABASE_URL")
 if not database_url:
     raise RuntimeError("DATABASE_URL environment variable is required for Alembic migrations")
 config.set_main_option("sqlalchemy.url", database_url)
