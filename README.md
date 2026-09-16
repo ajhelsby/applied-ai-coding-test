@@ -6,6 +6,18 @@
 - Docker and Docker Compose
 - Node.js (required for running all `pre-commit` hooks, including JS-based hooks)
 
+## Integration tests
+
+Run the integration suite with:
+
+```bash
+uv run pytest tests/integration
+```
+
+The suite uses externally configured PostgreSQL and Redis when both `DATABASE_URL` and
+`REDIS_URL` are set. When neither is configured, it starts disposable PostgreSQL and Redis
+Testcontainers automatically. Docker must be running for the local fallback mode.
+
 ## Docker runtime
 
 1. Copy Docker environment defaults:
