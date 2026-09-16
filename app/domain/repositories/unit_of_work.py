@@ -7,6 +7,7 @@ from typing import Protocol
 
 from app.domain.repositories.node_execution_repository import NodeExecutionRepository
 from app.domain.repositories.outbox_event_repository import OutboxEventRepository
+from app.domain.repositories.task_processing_repository import TaskProcessingRepository
 from app.domain.repositories.workflow_execution_repository import WorkflowExecutionRepository
 from app.domain.repositories.workflow_repository import WorkflowRepository
 
@@ -18,6 +19,7 @@ class UnitOfWork(Protocol):
     workflow_executions: WorkflowExecutionRepository
     node_executions: NodeExecutionRepository
     outbox_events: OutboxEventRepository
+    task_processing: TaskProcessingRepository
 
     def transaction(self) -> AbstractAsyncContextManager[UnitOfWork]:
         """Provide a managed transactional scope."""

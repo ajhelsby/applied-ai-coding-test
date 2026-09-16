@@ -117,3 +117,21 @@ row-level lock on the workflow execution record.
   PostgreSQL, while task dispatch occurs after the transaction commits.
 - The lock is scoped to one execution, so unrelated workflow executions can continue processing
   concurrently.
+
+## 11) Worker task idempotency
+
+**Decision:** Persist worker task-processing state in a dedicated PostgreSQL record keyed by the
+task's deterministic `task_id`.
+
+**Why:**
+
+- Redis Streams provide at-least-once delivery, so the same task message may be delivered more
+  than once.
+- A PostgreSQL uniqueness constraint and atomic claim operation prevent multiple Worker processes
+  from executing the same task concurrently.
+- A dedicated task-processing record keeps message-delivery and retry state separate from the
+  workflow node lifecycle represented by `node_executions`.
+- Persisted completion state survives Worker restarts and allows completed duplicate deliveries to
+  be acknowledged safely without invoking the handler again.
+- PostgreSQL remains the authoritative source for idempotency state; Redis is used only as the
+  asynchronous transport.
