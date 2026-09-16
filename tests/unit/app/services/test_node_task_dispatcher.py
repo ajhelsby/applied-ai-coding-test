@@ -284,17 +284,29 @@ def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
         published.append(fields)
         return "1-0"
 
-    with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
-        asyncio.run(
+    if dependency_status is NodeExecutionStatus.FAILED:
+        result = asyncio.run(
             RedisNodeTaskDispatcher(publish_task).dispatch(
                 execution,
                 node,
                 FakeUnitOfWork(node_executions),
             )
         )
+        assert result.outcome is DispatchOutcome.ALREADY_STARTED
+        assert result.reason == "A required dependency failed; node was skipped."
+        assert node_executions.statuses[node.id] is NodeExecutionStatus.SKIPPED
+    else:
+        with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
+            asyncio.run(
+                RedisNodeTaskDispatcher(publish_task).dispatch(
+                    execution,
+                    node,
+                    FakeUnitOfWork(node_executions),
+                )
+            )
+        assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
 
     assert published == []
-    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
     assert node_executions.update_calls == []
 
 
