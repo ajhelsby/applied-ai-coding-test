@@ -19,34 +19,6 @@ from app.domain.validation.rules import (
 )
 
 
-def valid_workflow() -> dict[str, Any]:
-    return {
-        "name": "Parallel API Fetcher",
-        "dag": {
-            "nodes": [
-                {"id": "input", "handler": "input", "dependencies": []},
-                {
-                    "id": "get_user",
-                    "handler": "call_external_service",
-                    "dependencies": ["input"],
-                    "config": {"url": "https://example.test/users"},
-                },
-                {
-                    "id": "get_posts",
-                    "handler": "call_external_service",
-                    "dependencies": ["input"],
-                    "config": {"url": "https://example.test/posts"},
-                },
-                {
-                    "id": "output",
-                    "handler": "output",
-                    "dependencies": ["get_user", "get_posts"],
-                },
-            ]
-        },
-    }
-
-
 @pytest.mark.parametrize(
     ("workflow", "code"),
     [
@@ -88,8 +60,10 @@ def test_required_node_fields_rule_rejects_non_object_nodes() -> None:
 
 
 @pytest.mark.parametrize("node_id", ["", " ", "1start", "invalid id", "invalid.id"])
-def test_node_id_validity_rule_rejects_invalid_identifiers(node_id: str) -> None:
-    workflow = valid_workflow()
+def test_node_id_validity_rule_rejects_invalid_identifiers(
+    node_id: str, valid_workflow: dict[str, Any]
+) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][0]["id"] = node_id
 
     errors = NodeIdValidityRule().validate(workflow)
@@ -98,8 +72,8 @@ def test_node_id_validity_rule_rejects_invalid_identifiers(node_id: str) -> None
     assert errors[0].path == "dag.nodes[0].id"
 
 
-def test_unique_node_ids_rule_reports_each_duplicate() -> None:
-    workflow = valid_workflow()
+def test_unique_node_ids_rule_reports_each_duplicate(valid_workflow: dict[str, Any]) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][1]["id"] = "input"
 
     errors = UniqueNodeIdsRule().validate(workflow)
@@ -109,8 +83,10 @@ def test_unique_node_ids_rule_reports_each_duplicate() -> None:
 
 
 @pytest.mark.parametrize("handler", ["", "unknown_handler", None])
-def test_handler_definition_rule_rejects_unsupported_handlers(handler: object) -> None:
-    workflow = valid_workflow()
+def test_handler_definition_rule_rejects_unsupported_handlers(
+    handler: object, valid_workflow: dict[str, Any]
+) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][0]["handler"] = handler
 
     errors = HandlerDefinitionRule().validate(workflow)
@@ -158,8 +134,10 @@ def test_node_configuration_rule_enforces_handler_contracts(
     assert NodeConfigurationRule().validate(workflow)[0].code == code
 
 
-def test_dependency_reference_rule_rejects_unknown_dependencies() -> None:
-    workflow = valid_workflow()
+def test_dependency_reference_rule_rejects_unknown_dependencies(
+    valid_workflow: dict[str, Any],
+) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][1]["dependencies"] = ["missing"]
 
     error = DependencyReferenceRule().validate(workflow)[0]
@@ -169,8 +147,8 @@ def test_dependency_reference_rule_rejects_unknown_dependencies() -> None:
     assert error.dependency_id == "missing"
 
 
-def test_dependency_reference_rule_rejects_self_references() -> None:
-    workflow = valid_workflow()
+def test_dependency_reference_rule_rejects_self_references(valid_workflow: dict[str, Any]) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][1]["dependencies"] = ["get_user"]
 
     error = DependencyReferenceRule().validate(workflow)[0]
@@ -180,8 +158,10 @@ def test_dependency_reference_rule_rejects_self_references() -> None:
     assert error.dependency_id == "get_user"
 
 
-def test_dependency_reference_rule_rejects_duplicate_dependencies() -> None:
-    workflow = valid_workflow()
+def test_dependency_reference_rule_rejects_duplicate_dependencies(
+    valid_workflow: dict[str, Any],
+) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][3]["dependencies"] = ["get_user", "get_user"]
 
     error = DependencyReferenceRule().validate(workflow)[0]
@@ -191,8 +171,10 @@ def test_dependency_reference_rule_rejects_duplicate_dependencies() -> None:
     assert error.dependency_id == "get_user"
 
 
-def test_dependency_reference_rule_allows_cyclic_references_without_cycle_error() -> None:
-    workflow = valid_workflow()
+def test_dependency_reference_rule_allows_cyclic_references_without_cycle_error(
+    valid_workflow: dict[str, Any],
+) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][0]["dependencies"] = ["output"]
 
     errors = DependencyReferenceRule().validate(workflow)
@@ -200,8 +182,10 @@ def test_dependency_reference_rule_allows_cyclic_references_without_cycle_error(
     assert all(error.code != "cyclic_dependency" for error in errors)
 
 
-def test_dependency_reference_rule_reports_errors_in_deterministic_order() -> None:
-    workflow = valid_workflow()
+def test_dependency_reference_rule_reports_errors_in_deterministic_order(
+    valid_workflow: dict[str, Any],
+) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][1]["dependencies"] = ["missing", "get_user", "input", "input"]
     workflow["dag"]["nodes"][3]["dependencies"] = ["unknown_second"]
 
@@ -215,8 +199,65 @@ def test_dependency_reference_rule_reports_errors_in_deterministic_order() -> No
     ]
 
 
-def test_cycle_detection_rule_rejects_cycles() -> None:
-    workflow = valid_workflow()
+@pytest.mark.parametrize(
+    "nodes",
+    [
+        [{"id": "root", "handler": "input", "dependencies": []}],
+        [
+            {"id": "left-root", "handler": "input", "dependencies": []},
+            {"id": "left", "handler": "output", "dependencies": ["left-root"]},
+            {"id": "right-root", "handler": "input", "dependencies": []},
+            {"id": "right", "handler": "output", "dependencies": ["right-root"]},
+        ],
+        [
+            {"id": "root", "handler": "input", "dependencies": []},
+            {"id": "left", "handler": "output", "dependencies": ["root"]},
+            {"id": "right", "handler": "output", "dependencies": ["root"]},
+            {
+                "id": "join",
+                "handler": "output",
+                "dependencies": ["left", "right"],
+            },
+        ],
+    ],
+)
+def test_dependency_reference_rule_accepts_valid_dependency_shapes(
+    nodes: list[dict[str, Any]],
+) -> None:
+    workflow = {"name": "valid-dependencies", "dag": {"nodes": nodes}}
+
+    assert DependencyReferenceRule().validate(workflow) == []
+
+
+def test_dependency_reference_rule_rejects_non_string_dependencies(
+    valid_workflow: dict[str, Any],
+) -> None:
+    workflow = valid_workflow
+    workflow["dag"]["nodes"][1]["dependencies"] = ["input", 42]
+
+    error = DependencyReferenceRule().validate(workflow)[0]
+
+    assert error.code == "unknown_dependency"
+    assert error.path == "dag.nodes[1].dependencies[1]"
+    assert error.node_id == "get_user"
+    assert error.dependency_id is None
+
+
+def test_required_node_fields_rule_rejects_empty_node_definitions() -> None:
+    workflow = {"name": "empty-node", "dag": {"nodes": [{}]}}
+
+    errors = RequiredNodeFieldsRule().validate(workflow)
+
+    assert [error.code for error in errors] == [
+        "required_node_id",
+        "required_node_handler",
+        "required_node_dependencies",
+    ]
+    assert all(error.path.startswith("dag.nodes[0].") for error in errors)
+
+
+def test_cycle_detection_rule_rejects_cycles(valid_workflow: dict[str, Any]) -> None:
+    workflow = valid_workflow
     workflow["dag"]["nodes"][0]["dependencies"] = ["output"]
 
     error = CycleDetectionRule().validate(workflow)[0]
@@ -264,6 +305,37 @@ def test_cycle_detection_rule_detects_indirect_cycle_with_path() -> None:
     assert errors[0].meta["cycle_path"] == "A->B->C->A"
 
 
+def test_cycle_detection_rule_accepts_valid_linear_dag() -> None:
+    workflow = {
+        "name": "linear-dag",
+        "dag": {
+            "nodes": [
+                {"id": "A", "handler": "input", "dependencies": []},
+                {"id": "B", "handler": "output", "dependencies": ["A"]},
+                {"id": "C", "handler": "output", "dependencies": ["B"]},
+            ]
+        },
+    }
+
+    assert CycleDetectionRule().validate(workflow) == []
+
+
+def test_cycle_detection_rule_accepts_valid_fan_out_fan_in_dag() -> None:
+    workflow = {
+        "name": "fan-out-fan-in-dag",
+        "dag": {
+            "nodes": [
+                {"id": "A", "handler": "input", "dependencies": []},
+                {"id": "B", "handler": "output", "dependencies": ["A"]},
+                {"id": "C", "handler": "output", "dependencies": ["A"]},
+                {"id": "D", "handler": "output", "dependencies": ["B", "C"]},
+            ]
+        },
+    }
+
+    assert CycleDetectionRule().validate(workflow) == []
+
+
 def test_cycle_detection_rule_handles_multiple_independent_branches() -> None:
     workflow = {
         "name": "independent-branches",
@@ -282,6 +354,45 @@ def test_cycle_detection_rule_handles_multiple_independent_branches() -> None:
     assert len(errors) == 1
     assert errors[0].code == "cyclic_dependency"
     assert errors[0].meta["cycle_path"] == "X->Y->X"
+
+
+def test_cycle_detection_rule_rejects_cycle_with_valid_disconnected_branch() -> None:
+    workflow = {
+        "name": "valid-branch-and-cycle",
+        "dag": {
+            "nodes": [
+                {"id": "root", "handler": "input", "dependencies": []},
+                {"id": "valid", "handler": "output", "dependencies": ["root"]},
+                {"id": "A", "handler": "input", "dependencies": ["B"]},
+                {"id": "B", "handler": "output", "dependencies": ["C"]},
+                {"id": "C", "handler": "output", "dependencies": ["A"]},
+            ]
+        },
+    }
+
+    errors = CycleDetectionRule().validate(workflow)
+
+    assert len(errors) == 1
+    assert errors[0].code == "cyclic_dependency"
+    assert errors[0].meta["cycle_path"] == "A->B->C->A"
+
+
+def test_cycle_detection_rule_rejects_graph_without_a_valid_starting_node() -> None:
+    workflow = {
+        "name": "no-root",
+        "dag": {
+            "nodes": [
+                {"id": "A", "handler": "input", "dependencies": ["B"]},
+                {"id": "B", "handler": "output", "dependencies": ["A"]},
+            ]
+        },
+    }
+
+    errors = CycleDetectionRule().validate(workflow)
+
+    assert len(errors) == 1
+    assert errors[0].code == "cyclic_dependency"
+    assert errors[0].meta["cycle_path"] == "A->B->A"
 
 
 def test_cycle_detection_rule_allows_large_acyclic_graph() -> None:
@@ -312,12 +423,14 @@ def test_cycle_detection_rule_allows_large_acyclic_graph() -> None:
         CycleDetectionRule(),
     ],
 )
-def test_rules_accept_valid_fan_out_fan_in_workflow(rule: object) -> None:
-    assert rule.validate(valid_workflow()) == []
+def test_rules_accept_valid_fan_out_fan_in_workflow(
+    rule: object, valid_workflow: dict[str, Any]
+) -> None:
+    assert rule.validate(valid_workflow) == []
 
 
-def test_rules_do_not_mutate_workflow() -> None:
-    workflow = valid_workflow()
+def test_rules_do_not_mutate_workflow(valid_workflow: dict[str, Any]) -> None:
+    workflow = valid_workflow
     original = deepcopy(workflow)
 
     for rule in (
