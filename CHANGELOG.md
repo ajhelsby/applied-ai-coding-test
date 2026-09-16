@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.6](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.5...v0.0.6) (2026-09-16)
+
+
+### Features
+
+* **#31:** Add persistent worker task-processing state with associate… ([#79](https://github.com/ajhelsby/applied-ai-coding-test/issues/79)) ([cf0ee67](https://github.com/ajhelsby/applied-ai-coding-test/commit/cf0ee676f20ca9b5b3d3d794cb6d1690720a503c))
+* **#32:** Add durable task attempt and retry state management features ([#81](https://github.com/ajhelsby/applied-ai-coding-test/issues/81)) ([14b7382](https://github.com/ajhelsby/applied-ai-coding-test/commit/14b73823697f3a73fc6b0f4df014cee9ae492fb0))
+* **#33:** Add logic to skip nodes on dependency failures ([#82](https://github.com/ajhelsby/applied-ai-coding-test/issues/82)) ([3949e8b](https://github.com/ajhelsby/applied-ai-coding-test/commit/3949e8b7583b6ae775a1adb1cb52cb4a901f2d79))
+* **#34:** Generalize outbox message schema and add support for task messages ([#83](https://github.com/ajhelsby/applied-ai-coding-test/issues/83)) ([6b4629d](https://github.com/ajhelsby/applied-ai-coding-test/commit/6b4629d384212a6710e653d0b7436d270f4581e1))
+
 ## [0.0.5](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.4...v0.0.5) (2026-09-15)
 
 
