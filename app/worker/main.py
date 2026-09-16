@@ -22,7 +22,7 @@ from app.messaging.redis.streams import (
 )
 from app.messaging.task_messages import NodeTaskMessage
 from app.worker.logging import configure_json_logging
-from app.worker.task_processor import WorkerTaskProcessor
+from app.worker.task_processor import UnitOfWorkFactory, WorkerTaskProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,16 @@ def _reclaim_idle_ms() -> int:
     return int(os.getenv("WORKER_RECLAIM_IDLE_MS", str(DEFAULT_RECLAIM_IDLE_MS)))
 
 
+def _task_claim_lease_seconds() -> float:
+    return float(os.getenv("WORKER_TASK_CLAIM_LEASE_SECONDS", "20"))
+
+
+def _unit_of_work_factory() -> UnitOfWorkFactory:
+    from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+
+    return SqlAlchemyUnitOfWork
+
+
 def main() -> None:
     stop_event = asyncio.Event()
 
@@ -230,20 +240,34 @@ def main() -> None:
     signal.signal(signal.SIGINT, handle_signal)
 
     configure_json_logging(os.getenv("LOG_LEVEL", "INFO"))
+    consumer_name = _consumer_name()
+    reclaim_idle_ms = _reclaim_idle_ms()
+    task_claim_lease_seconds = _task_claim_lease_seconds()
+    if task_claim_lease_seconds >= reclaim_idle_ms / 1000:
+        raise ValueError(
+            "WORKER_TASK_CLAIM_LEASE_SECONDS must be shorter than WORKER_RECLAIM_IDLE_MS."
+        )
     try:
-        task_processor = WorkerTaskProcessor()
+        task_processor = WorkerTaskProcessor(
+            unit_of_work_factory=_unit_of_work_factory(),
+            worker_id=consumer_name,
+            task_claim_lease_seconds=task_claim_lease_seconds,
+        )
         asyncio.run(
             WorkerRuntime(
-                consumer_name=_consumer_name(),
+                consumer_name=consumer_name,
                 process_message=task_processor.process,
                 process_malformed_message=task_processor.process_malformed,
                 max_concurrency=_max_concurrency(),
                 shutdown_timeout_seconds=_shutdown_timeout_seconds(),
-                reclaim_idle_ms=_reclaim_idle_ms(),
+                reclaim_idle_ms=reclaim_idle_ms,
             ).run(stop_event)
         )
     finally:
         asyncio.run(close_async_redis_client())
+        from app.db.session import close_database_connections
+
+        asyncio.run(close_database_connections())
 
 
 if __name__ == "__main__":
