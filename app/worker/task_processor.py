@@ -77,7 +77,7 @@ class WorkerTaskProcessor:
                         "execution_id": str(task.execution_id),
                         "node_id": task.node_id,
                         "claim_outcome": claim_outcome.value,
-                        "message_id": message_id,
+                        "message_id": str(task.message_id or message_id),
                     },
                 )
                 return
@@ -93,7 +93,7 @@ class WorkerTaskProcessor:
                 "execution_id": str(task.execution_id),
                 "node_id": task.node_id,
                 "handler": task.handler,
-                "message_id": message_id,
+                "message_id": str(task.message_id or message_id),
             },
         )
         try:
@@ -106,7 +106,7 @@ class WorkerTaskProcessor:
                     "task_id": task.task_id,
                     "execution_id": str(task.execution_id),
                     "node_id": task.node_id,
-                    "message_id": message_id,
+                    "message_id": str(task.message_id or message_id),
                 },
             )
         else:

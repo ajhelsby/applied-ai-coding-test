@@ -87,11 +87,35 @@ class InMemoryOutboxRepository:
     def __init__(self) -> None:
         self.events: list[object] = []
 
+    async def add_message(
+        self,
+        *,
+        message_id: UUID,
+        message_type: str,
+        target_stream: str,
+        payload: dict[str, object],
+        aggregate_id: UUID | None = None,
+    ) -> None:
+        del message_id, message_type, target_stream, payload
+        self.events.append(aggregate_id)
+
     async def add_execution_triggered(self, execution_id: UUID) -> None:
         self.events.append(execution_id)
 
 
 class FailingOutboxRepository(InMemoryOutboxRepository):
+    async def add_message(
+        self,
+        *,
+        message_id: UUID,
+        message_type: str,
+        target_stream: str,
+        payload: dict[str, object],
+        aggregate_id: UUID | None = None,
+    ) -> None:
+        del message_id, message_type, target_stream, payload, aggregate_id
+        raise WorkflowPersistenceError("Outbox unavailable")
+
     async def add_execution_triggered(self, execution_id: UUID) -> None:
         del execution_id
         raise WorkflowPersistenceError("Outbox unavailable")

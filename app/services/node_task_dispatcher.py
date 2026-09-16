@@ -10,8 +10,6 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID, uuid4, uuid5
 
-from redis.exceptions import RedisError
-
 from app.domain.errors.transitions import WorkflowExecutionNotFoundError
 from app.domain.models.execution import WorkflowExecution
 from app.domain.models.node import WorkflowNode
@@ -161,20 +159,8 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                     attempt_id=attempt_id,
                     started_at=datetime.now(UTC),
                 )
-
-        if not claimed:
-            return DispatchResult(
-                execution_id=execution.execution_id,
-                node_id=node.id,
-                task_id=task_id,
-                outcome=DispatchOutcome.ALREADY_STARTED,
-                reason="Node was already dispatched or is no longer eligible to dispatch.",
-            )
-
-        try:
-            await self._task_publisher(
-                WORKFLOW_TASKS_STREAM,
-                NodeTaskMessage(
+            if claimed:
+                task_message = NodeTaskMessage(
                     task_id=task_id,
                     attempt_id=attempt_id,
                     attempt_number=1,
@@ -183,24 +169,29 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                     handler=node.handler,
                     handler_config=node.config,
                     resolved_input=resolved_input,
-                ).to_stream_fields(),
-            )
-        except RedisError as error:
-            async with unit_of_work.transaction() as transaction:
-                await transaction.node_executions.update_status_if_current(
-                    execution_id=execution.execution_id,
-                    node_id=node.id,
-                    expected_current_status=NodeExecutionStatus.RUNNING,
-                    new_status=NodeExecutionStatus.READY,
-                    error_message=str(error),
-                    error_type=type(error).__name__,
                 )
+                await transaction.outbox_events.add_task(
+                    message_id=UUID(task_id),
+                    aggregate_id=execution.execution_id,
+                    payload={
+                        "task_id": task_message.task_id,
+                        "attempt_id": str(task_message.attempt_id),
+                        "attempt_number": task_message.attempt_number,
+                        "execution_id": str(task_message.execution_id),
+                        "node_id": task_message.node_id,
+                        "handler": task_message.handler,
+                        "handler_config": task_message.handler_config,
+                        "resolved_input": task_message.resolved_input,
+                    },
+                )
+
+        if not claimed:
             return DispatchResult(
                 execution_id=execution.execution_id,
                 node_id=node.id,
                 task_id=task_id,
-                outcome=DispatchOutcome.FAILED_TO_PUBLISH,
-                reason=str(error),
+                outcome=DispatchOutcome.ALREADY_STARTED,
+                reason="Node was already dispatched or is no longer eligible to dispatch.",
             )
 
         return DispatchResult(

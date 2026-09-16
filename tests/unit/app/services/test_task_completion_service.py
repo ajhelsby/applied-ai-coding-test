@@ -132,6 +132,19 @@ class FakeWorkflows:
         return self.workflow
 
 
+class FakeOutboxEvents:
+    async def add_message(
+        self,
+        *,
+        message_id: UUID,
+        message_type: str,
+        target_stream: str,
+        payload: dict[str, object],
+        aggregate_id: UUID | None = None,
+    ) -> None:
+        del message_id, message_type, target_stream, payload, aggregate_id
+
+
 class FakeUnitOfWork:
     def __init__(
         self,
@@ -142,6 +155,7 @@ class FakeUnitOfWork:
         self.workflow_executions = FakeWorkflowExecutions(execution)
         self.workflows = FakeWorkflows(workflow)
         self.node_executions = FakeNodeExecutions(node_statuses)
+        self.outbox_events = FakeOutboxEvents()
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[FakeUnitOfWork]:

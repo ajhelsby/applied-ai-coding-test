@@ -3,11 +3,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from json import loads
 from uuid import UUID, uuid4
 
 import pytest
-from redis.exceptions import ConnectionError
 
 from app.domain.models.execution import NodeExecution, WorkflowExecution
 from app.domain.models.node import WorkflowNode
@@ -97,10 +95,30 @@ class FakeWorkflowExecutions:
         return WorkflowExecution(workflow_id=uuid4())
 
 
+class FakeOutboxEvents:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, object]] = []
+        self.message_ids: list[UUID] = []
+        self.payloads: list[dict[str, object]] = []
+
+    async def add_task(
+        self,
+        *,
+        message_id: UUID,
+        payload: dict[str, object],
+        aggregate_id: UUID | None = None,
+    ) -> None:
+        del aggregate_id
+        self.messages.append(payload)
+        self.message_ids.append(message_id)
+        self.payloads.append(payload)
+
+
 class FakeUnitOfWork:
     def __init__(self, node_executions: FakeNodeExecutions) -> None:
         self.node_executions = node_executions
         self.workflow_executions = FakeWorkflowExecutions()
+        self.outbox_events = FakeOutboxEvents()
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[FakeUnitOfWork]:
@@ -123,33 +141,29 @@ def test_dispatch_publishes_task_after_claiming_node() -> None:
     execution = make_execution()
     node = make_node()
     node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.READY})
-    published: list[dict[str, str]] = []
-
-    async def publish_task(stream: str, fields: dict[str, str]) -> str:
-        assert stream == "workflow.tasks"
-        published.append(fields)
-        return "1-0"
+    unit_of_work = FakeUnitOfWork(node_executions)
 
     result = asyncio.run(
-        RedisNodeTaskDispatcher(publish_task).dispatch(
+        RedisNodeTaskDispatcher().dispatch(
             execution,
             node,
-            FakeUnitOfWork(node_executions),
+            unit_of_work,
         )
     )
 
     assert result.outcome is DispatchOutcome.DISPATCHED
     assert result.task_id == create_task_id(execution.execution_id, node.id)
-    assert published == [
+    assert unit_of_work.outbox_events.message_ids == [UUID(result.task_id)]
+    assert unit_of_work.outbox_events.payloads == [
         {
             "task_id": result.task_id,
-            "attempt_id": published[0]["attempt_id"],
-            "attempt_number": "1",
+            "attempt_id": unit_of_work.outbox_events.payloads[0]["attempt_id"],
+            "attempt_number": 1,
             "execution_id": str(execution.execution_id),
             "node_id": node.id,
             "handler": "example.handler",
-            "handler_config": '{"url":"https://example.com/task"}',
-            "resolved_input": '{"url":"https://example.com/task"}',
+            "handler_config": {"url": "https://example.com/task"},
+            "resolved_input": {"url": "https://example.com/task"},
         }
     ]
     assert node_executions.statuses[node.id] is NodeExecutionStatus.RUNNING
@@ -191,25 +205,11 @@ def test_dispatch_many_dispatches_independent_nodes_concurrently() -> None:
     node_executions = FakeNodeExecutions(
         {first_node.id: NodeExecutionStatus.READY, second_node.id: NodeExecutionStatus.READY}
     )
-    both_publishes_started = asyncio.Event()
-    publish_count = 0
-
-    async def publish_task(_stream: str, _fields: dict[str, str]) -> str:
-        nonlocal publish_count
-        publish_count += 1
-        if publish_count == 2:
-            both_publishes_started.set()
-        await both_publishes_started.wait()
-        return f"{publish_count}-0"
-
     results = asyncio.run(
-        asyncio.wait_for(
-            RedisNodeTaskDispatcher(publish_task).dispatch_many(
-                execution,
-                [first_node, second_node],
-                lambda: FakeUnitOfWork(node_executions),
-            ),
-            timeout=0.1,
+        RedisNodeTaskDispatcher().dispatch_many(
+            execution,
+            [first_node, second_node],
+            lambda: FakeUnitOfWork(node_executions),
         )
     )
 
@@ -237,21 +237,17 @@ def test_dispatch_resolves_templates_from_completed_dependency_outputs() -> None
         },
         outputs={"get_posts": {"count": 2}},
     )
-    published: list[dict[str, str]] = []
-
-    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
-        published.append(fields)
-        return "1-0"
+    unit_of_work = FakeUnitOfWork(node_executions)
 
     asyncio.run(
-        RedisNodeTaskDispatcher(publish_task).dispatch(
+        RedisNodeTaskDispatcher().dispatch(
             execution,
             node,
-            FakeUnitOfWork(node_executions),
+            unit_of_work,
         )
     )
 
-    assert loads(published[0]["resolved_input"]) == {
+    assert unit_of_work.outbox_events.payloads[0]["resolved_input"] == {
         "post_count": 2,
         "description": "Found 2 posts.",
     }
@@ -397,21 +393,17 @@ def test_dispatch_aggregates_completed_fan_in_dependencies_for_output_node() -> 
             "get_comments": {"comments": [{"post_id": 1}]},
         },
     )
-    published: list[dict[str, str]] = []
-
-    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
-        published.append(fields)
-        return "1-0"
+    unit_of_work = FakeUnitOfWork(node_executions)
 
     asyncio.run(
-        RedisNodeTaskDispatcher(publish_task).dispatch(
+        RedisNodeTaskDispatcher().dispatch(
             execution,
             node,
-            FakeUnitOfWork(node_executions),
+            unit_of_work,
         )
     )
 
-    assert loads(published[0]["resolved_input"]) == {
+    assert unit_of_work.outbox_events.payloads[0]["resolved_input"] == {
         "get_posts": {"posts": [{"id": 1}]},
         "get_comments": {"comments": [{"post_id": 1}]},
     }
@@ -421,43 +413,32 @@ def test_duplicate_dispatch_does_not_publish_another_task() -> None:
     execution = make_execution()
     node = make_node()
     node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.READY})
-    published: list[dict[str, str]] = []
-
-    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
-        published.append(fields)
-        return "1-0"
-
-    dispatcher = RedisNodeTaskDispatcher(publish_task)
     unit_of_work = FakeUnitOfWork(node_executions)
+    dispatcher = RedisNodeTaskDispatcher()
     first_result = asyncio.run(dispatcher.dispatch(execution, node, unit_of_work))
     duplicate_result = asyncio.run(dispatcher.dispatch(execution, node, unit_of_work))
 
     assert first_result.outcome is DispatchOutcome.DISPATCHED
     assert duplicate_result.outcome is DispatchOutcome.ALREADY_STARTED
     assert duplicate_result.task_id == first_result.task_id
-    assert len(published) == 1
+    assert len(unit_of_work.outbox_events.messages) == 1
 
 
-def test_dispatch_releases_claim_when_task_publishing_fails() -> None:
+def test_dispatch_records_task_when_redis_is_unavailable() -> None:
     execution = make_execution()
     node = make_node()
     node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.READY})
 
-    async def publish_task(_stream: str, _fields: dict[str, str]) -> str:
-        raise ConnectionError("Redis unavailable")
-
     result = asyncio.run(
-        RedisNodeTaskDispatcher(publish_task).dispatch(
+        RedisNodeTaskDispatcher().dispatch(
             execution,
             node,
             FakeUnitOfWork(node_executions),
         )
     )
 
-    assert result.outcome is DispatchOutcome.FAILED_TO_PUBLISH
-    assert result.reason == "Redis unavailable"
-    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
+    assert result.outcome is DispatchOutcome.DISPATCHED
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.RUNNING
     assert node_executions.update_calls == [
         (node.id, NodeExecutionStatus.READY, NodeExecutionStatus.RUNNING),
-        (node.id, NodeExecutionStatus.RUNNING, NodeExecutionStatus.READY),
     ]

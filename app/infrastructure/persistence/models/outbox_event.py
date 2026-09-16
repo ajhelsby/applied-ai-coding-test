@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,13 +19,27 @@ class OutboxEventRecord(Base):
 
     __tablename__ = "outbox_events"
 
-    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    aggregate_id: Mapped[UUID] = mapped_column(
+    event_id: Mapped[UUID] = mapped_column(
+        "message_id",
         PGUUID(as_uuid=True),
-        ForeignKey("workflow_executions.execution_id", ondelete="CASCADE"),
+        primary_key=True,
+        default=uuid4,
+    )
+    event_type: Mapped[str] = mapped_column(
+        "message_type",
+        String(128),
         nullable=False,
         index=True,
+    )
+    aggregate_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
+    target_stream: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="workflow.events",
     )
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)

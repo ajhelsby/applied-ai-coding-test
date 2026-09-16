@@ -38,6 +38,7 @@ class TaskCompletionEvent:
         """Serialize the completion event for publishing to Redis Streams."""
 
         fields = {
+            "message_id": str(self.event_id),
             "event_id": str(self.event_id),
             "task_id": self.task_id,
             "attempt_id": str(self.attempt_id),
@@ -63,7 +64,9 @@ class TaskCompletionEvent:
     def from_stream_fields(cls, fields: Mapping[str, str]) -> TaskCompletionEvent:
         """Parse and validate a flat Redis stream completion event."""
 
-        event_id = UUID(required_field(fields, "event_id", "Task completion event"))
+        event_id = UUID(
+            fields.get("message_id") or required_field(fields, "event_id", "Task completion event")
+        )
         task_id = required_field(fields, "task_id", "Task completion event")
         attempt_id = UUID(required_field(fields, "attempt_id", "Task completion event"))
         attempt_number = int(required_field(fields, "attempt_number", "Task completion event"))

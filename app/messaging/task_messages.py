@@ -16,6 +16,7 @@ class NodeTaskMessage(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    message_id: UUID | None = None
     task_id: str = Field(min_length=1)
     attempt_id: UUID = Field(default_factory=uuid4)
     attempt_number: int = Field(default=1, ge=1)
@@ -31,6 +32,7 @@ class NodeTaskMessage(BaseModel):
 
         return cls.model_validate(
             {
+                "message_id": fields.get("message_id"),
                 "task_id": required_field(fields, "task_id", "Task message"),
                 "attempt_id": required_field(fields, "attempt_id", "Task message"),
                 "attempt_number": required_field(fields, "attempt_number", "Task message"),
@@ -45,7 +47,7 @@ class NodeTaskMessage(BaseModel):
     def to_stream_fields(self) -> dict[str, str]:
         """Serialize task message fields for publishing to Redis Streams."""
 
-        return {
+        fields = {
             "task_id": self.task_id,
             "attempt_id": str(self.attempt_id),
             "attempt_number": str(self.attempt_number),
@@ -55,3 +57,6 @@ class NodeTaskMessage(BaseModel):
             "handler_config": dumps(self.handler_config, separators=(",", ":"), sort_keys=True),
             "resolved_input": dumps(self.resolved_input, separators=(",", ":"), sort_keys=True),
         }
+        if self.message_id is not None:
+            fields["message_id"] = str(self.message_id)
+        return fields

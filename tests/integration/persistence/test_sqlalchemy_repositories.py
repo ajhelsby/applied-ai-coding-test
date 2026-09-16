@@ -8,12 +8,14 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.domain.models.execution import NodeExecution, WorkflowExecution
 from app.domain.models.node import WorkflowNode
 from app.domain.models.workflow import Workflow, WorkflowDag
 from app.domain.state.states import NodeExecutionStatus, WorkflowExecutionStatus
+from app.infrastructure.persistence.models.outbox_event import OutboxEventRecord
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -302,5 +304,51 @@ def test_rolls_back_related_writes_when_a_transaction_fails(
 
         async with uow.transaction() as transaction:
             assert await transaction.workflows.get_workflow_by_id(workflow.workflow_id) is None
+
+    asyncio.run(scenario())
+
+
+def test_rolls_back_state_transition_and_outbox_message_together(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async def scenario() -> None:
+        workflow = Workflow(name="outbox-rollback")
+        execution = WorkflowExecution(workflow_id=workflow.workflow_id)
+        uow = SqlAlchemyUnitOfWork(session_factory)
+
+        async with uow.transaction() as transaction:
+            await transaction.workflows.create_workflow(workflow)
+            await transaction.workflow_executions.create_execution(execution)
+
+        with pytest.raises(RuntimeError, match="force rollback"):
+            async with uow.transaction() as transaction:
+                assert await transaction.workflow_executions.update_status_if_current(
+                    execution.execution_id,
+                    WorkflowExecutionStatus.PENDING,
+                    WorkflowExecutionStatus.RUNNING,
+                )
+                await transaction.outbox_events.add_message(
+                    message_id=execution.execution_id,
+                    message_type="workflow.execution.triggered",
+                    target_stream="workflow.events",
+                    aggregate_id=execution.execution_id,
+                    payload={"execution_id": str(execution.execution_id)},
+                )
+                raise RuntimeError("force rollback")
+
+        async with uow.transaction() as transaction:
+            persisted_execution = await transaction.workflow_executions.get_execution_by_id(
+                execution.execution_id
+            )
+            assert persisted_execution is not None
+            assert persisted_execution.status is WorkflowExecutionStatus.PENDING
+
+        async with session_factory() as session:
+            result = await session.execute(
+                select(OutboxEventRecord).where(
+                    OutboxEventRecord.event_id == execution.execution_id
+                )
+            )
+            assert result.scalar_one_or_none() is None
 
     asyncio.run(scenario())

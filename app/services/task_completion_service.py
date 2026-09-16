@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from math import pow
+from uuid import uuid5
 
 from app.domain.dag import evaluate_failed_dependency_node_ids
 from app.domain.errors.transitions import WorkflowExecutionNotFoundError
@@ -16,6 +17,7 @@ from app.domain.repositories.task_retry_repository import (
 )
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
+from app.messaging.redis.streams import WORKFLOW_EVENTS_STREAM
 from app.messaging.task_completion import TaskCompletionEvent, TaskCompletionStatus
 from app.services.node_task_dispatcher import create_task_id
 from app.services.workflow_finalization_service import WorkflowFinalizationService
@@ -230,12 +232,46 @@ class TaskCompletionService:
                     workflow,
                     statuses_by_id,
                 )
-                await transaction.node_executions.skip_pending_or_ready_nodes(
+                skipped_node_ids = await transaction.node_executions.skip_pending_or_ready_nodes(
                     event.execution_id,
                     skipped_node_ids,
                     reason=f"Dependency '{event.node_id}' failed.",
                     completed_at=datetime.now(UTC),
                 )
+                for skipped_node_id in skipped_node_ids:
+                    await transaction.outbox_events.add_message(
+                        message_id=uuid5(
+                            event.event_id,
+                            f"node:{event.execution_id}:{skipped_node_id}:skipped",
+                        ),
+                        message_type="workflow.node.skipped",
+                        target_stream=WORKFLOW_EVENTS_STREAM,
+                        aggregate_id=event.execution_id,
+                        payload={
+                            "execution_id": str(event.execution_id),
+                            "node_id": skipped_node_id,
+                            "status": "skipped",
+                            "reason": f"Dependency '{event.node_id}' failed.",
+                        },
+                    )
+
+            await transaction.outbox_events.add_message(
+                message_id=event.event_id,
+                message_type=f"workflow.node.{event.status.value}",
+                target_stream=WORKFLOW_EVENTS_STREAM,
+                aggregate_id=event.execution_id,
+                payload={
+                    "execution_id": str(event.execution_id),
+                    "node_id": event.node_id,
+                    "status": event.status.value,
+                    "task_id": event.task_id,
+                    "attempt_id": str(event.attempt_id),
+                    "attempt_number": event.attempt_number,
+                    "output_data": event.output_data,
+                    "error_message": event.error_message,
+                    "error_type": event.error_type,
+                },
+            )
 
             ready_node_ids: tuple[str, ...] = ()
             if event.status is TaskCompletionStatus.COMPLETED:
@@ -249,6 +285,7 @@ class TaskCompletionService:
                 event.execution_id,
                 transaction,
                 execution,
+                correlation_id=event.event_id,
             )
 
             return TaskCompletionDecision(
