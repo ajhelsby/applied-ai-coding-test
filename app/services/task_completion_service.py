@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from math import pow
 
+from app.domain.dag import evaluate_failed_dependency_node_ids
 from app.domain.errors.transitions import WorkflowExecutionNotFoundError
 from app.domain.repositories.task_retry_repository import (
     RetryDecisionOutcome,
@@ -213,6 +214,27 @@ class TaskCompletionService:
                     execution_id=str(event.execution_id),
                     node_id=event.node_id,
                     outcome=TaskCompletionOutcome.DUPLICATE,
+                )
+
+            if event.status is TaskCompletionStatus.FAILED:
+                workflow = await transaction.workflows.get_workflow_by_id(execution.workflow_id)
+                if workflow is None:
+                    raise LookupError(f"Workflow '{execution.workflow_id}' was not found.")
+
+                statuses_by_id = {
+                    node_execution.node_id: node_execution.status
+                    for node_execution in node_executions
+                }
+                statuses_by_id[event.node_id] = NodeExecutionStatus.FAILED
+                skipped_node_ids = evaluate_failed_dependency_node_ids(
+                    workflow,
+                    statuses_by_id,
+                )
+                await transaction.node_executions.skip_pending_or_ready_nodes(
+                    event.execution_id,
+                    skipped_node_ids,
+                    reason=f"Dependency '{event.node_id}' failed.",
+                    completed_at=datetime.now(UTC),
                 )
 
             ready_node_ids: tuple[str, ...] = ()

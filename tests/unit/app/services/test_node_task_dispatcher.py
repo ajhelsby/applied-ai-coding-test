@@ -72,10 +72,35 @@ class FakeNodeExecutions:
             self.statuses[node_id] = NodeExecutionStatus.READY
         return claimed_ids
 
+    async def skip_pending_or_ready_nodes(
+        self,
+        _execution_id: UUID,
+        node_ids: Sequence[str],
+        *,
+        reason: str,
+        completed_at: object,
+    ) -> tuple[str, ...]:
+        del reason, completed_at
+        skipped_ids = tuple(
+            node_id
+            for node_id in node_ids
+            if self.statuses.get(node_id)
+            in {NodeExecutionStatus.PENDING, NodeExecutionStatus.READY}
+        )
+        for node_id in skipped_ids:
+            self.statuses[node_id] = NodeExecutionStatus.SKIPPED
+        return skipped_ids
+
+
+class FakeWorkflowExecutions:
+    async def get_execution_by_id_for_update(self, _execution_id: UUID) -> WorkflowExecution:
+        return WorkflowExecution(workflow_id=uuid4())
+
 
 class FakeUnitOfWork:
     def __init__(self, node_executions: FakeNodeExecutions) -> None:
         self.node_executions = node_executions
+        self.workflow_executions = FakeWorkflowExecutions()
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[FakeUnitOfWork]:
@@ -128,6 +153,36 @@ def test_dispatch_publishes_task_after_claiming_node() -> None:
         }
     ]
     assert node_executions.statuses[node.id] is NodeExecutionStatus.RUNNING
+
+
+def test_dispatch_skips_ready_node_when_dependency_failed() -> None:
+    execution = make_execution()
+    node = make_node("downstream")
+    node = node.model_copy(update={"dependencies": ["failed"]})
+    node_executions = FakeNodeExecutions(
+        {
+            "failed": NodeExecutionStatus.FAILED,
+            node.id: NodeExecutionStatus.READY,
+        }
+    )
+    published: list[dict[str, str]] = []
+
+    async def publish_task(_stream: str, fields: dict[str, str]) -> str:
+        published.append(fields)
+        return "1-0"
+
+    result = asyncio.run(
+        RedisNodeTaskDispatcher(publish_task).dispatch(
+            execution,
+            node,
+            FakeUnitOfWork(node_executions),
+        )
+    )
+
+    assert result.outcome is DispatchOutcome.ALREADY_STARTED
+    assert result.reason == "A required dependency failed; node was skipped."
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.SKIPPED
+    assert published == []
 
 
 def test_dispatch_many_dispatches_independent_nodes_concurrently() -> None:
@@ -229,17 +284,29 @@ def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
         published.append(fields)
         return "1-0"
 
-    with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
-        asyncio.run(
+    if dependency_status is NodeExecutionStatus.FAILED:
+        result = asyncio.run(
             RedisNodeTaskDispatcher(publish_task).dispatch(
                 execution,
                 node,
                 FakeUnitOfWork(node_executions),
             )
         )
+        assert result.outcome is DispatchOutcome.ALREADY_STARTED
+        assert result.reason == "A required dependency failed; node was skipped."
+        assert node_executions.statuses[node.id] is NodeExecutionStatus.SKIPPED
+    else:
+        with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
+            asyncio.run(
+                RedisNodeTaskDispatcher(publish_task).dispatch(
+                    execution,
+                    node,
+                    FakeUnitOfWork(node_executions),
+                )
+            )
+        assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
 
     assert published == []
-    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
     assert node_executions.update_calls == []
 
 

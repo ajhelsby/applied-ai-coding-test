@@ -12,6 +12,7 @@ from uuid import UUID, uuid4, uuid5
 
 from redis.exceptions import RedisError
 
+from app.domain.errors.transitions import WorkflowExecutionNotFoundError
 from app.domain.models.execution import WorkflowExecution
 from app.domain.models.node import WorkflowNode
 from app.domain.repositories.task_retry_repository import TaskRetryRepository
@@ -92,9 +93,42 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
 
         task_id = create_task_id(execution.execution_id, node.id)
         async with unit_of_work.transaction() as transaction:
+            if (
+                await transaction.workflow_executions.get_execution_by_id_for_update(
+                    execution.execution_id
+                )
+                is None
+            ):
+                raise WorkflowExecutionNotFoundError(str(execution.execution_id))
+
             node_executions = await transaction.node_executions.get_node_executions_for_execution(
                 execution.execution_id
             )
+            dependency_statuses = {
+                node_execution.node_id: node_execution.status for node_execution in node_executions
+            }
+            if any(
+                dependency_statuses.get(dependency_id)
+                in {
+                    NodeExecutionStatus.FAILED,
+                    NodeExecutionStatus.SKIPPED,
+                }
+                for dependency_id in node.dependencies
+            ):
+                await transaction.node_executions.skip_pending_or_ready_nodes(
+                    execution.execution_id,
+                    (node.id,),
+                    reason="A required dependency failed.",
+                    completed_at=datetime.now(UTC),
+                )
+                return DispatchResult(
+                    execution_id=execution.execution_id,
+                    node_id=node.id,
+                    task_id=task_id,
+                    outcome=DispatchOutcome.ALREADY_STARTED,
+                    reason="A required dependency failed; node was skipped.",
+                )
+
             completed_dependency_outputs = {
                 node_execution.node_id: node_execution.output_data
                 for node_execution in node_executions

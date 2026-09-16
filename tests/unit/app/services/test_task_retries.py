@@ -114,6 +114,17 @@ class FakeNodeExecutions:
         del execution_id, node_ids
         return ()
 
+    async def skip_pending_or_ready_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+        *,
+        reason: str,
+        completed_at: datetime,
+    ) -> tuple[str, ...]:
+        del execution_id, node_ids, reason, completed_at
+        return ()
+
 
 class FakeWorkflowExecutions:
     def __init__(self, execution: WorkflowExecution) -> None:

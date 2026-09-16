@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.dag import evaluate_ready_node_ids
+from app.domain.dag import evaluate_failed_dependency_node_ids, evaluate_ready_node_ids
 from app.domain.models.workflow import Workflow
 from app.domain.state.states import NodeExecutionStatus
 
@@ -123,3 +123,78 @@ def test_repeated_evaluation_is_deterministic_for_same_state() -> None:
 
     assert first == ("left", "right")
     assert second == ("left", "right")
+
+
+def test_failed_dependency_propagates_through_multiple_levels() -> None:
+    workflow = _workflow(
+        [
+            {"id": "a", "handler": "task", "dependencies": []},
+            {"id": "b", "handler": "task", "dependencies": ["a"]},
+            {"id": "c", "handler": "task", "dependencies": ["b"]},
+            {"id": "d", "handler": "task", "dependencies": ["c"]},
+        ]
+    )
+
+    skipped = evaluate_failed_dependency_node_ids(
+        workflow,
+        {"a": NodeExecutionStatus.FAILED},
+    )
+
+    assert skipped == ("b", "c", "d")
+
+
+def test_failed_dependency_handles_fan_out_and_fan_in() -> None:
+    workflow = _workflow(
+        [
+            {"id": "a", "handler": "task", "dependencies": []},
+            {"id": "b", "handler": "task", "dependencies": ["a"]},
+            {"id": "c", "handler": "task", "dependencies": ["a"]},
+            {"id": "d", "handler": "task", "dependencies": ["b", "c"]},
+        ]
+    )
+
+    skipped = evaluate_failed_dependency_node_ids(
+        workflow,
+        {"a": NodeExecutionStatus.FAILED},
+    )
+
+    assert skipped == ("b", "c", "d")
+
+
+def test_failed_dependency_does_not_skip_independent_or_running_nodes() -> None:
+    workflow = _workflow(
+        [
+            {"id": "failed", "handler": "task", "dependencies": []},
+            {"id": "dependent", "handler": "task", "dependencies": ["failed"]},
+            {"id": "independent", "handler": "task", "dependencies": []},
+            {"id": "running", "handler": "task", "dependencies": ["failed"]},
+        ]
+    )
+
+    skipped = evaluate_failed_dependency_node_ids(
+        workflow,
+        {
+            "failed": NodeExecutionStatus.FAILED,
+            "independent": NodeExecutionStatus.PENDING,
+            "running": NodeExecutionStatus.RUNNING,
+        },
+    )
+
+    assert skipped == ("dependent",)
+
+
+def test_existing_skipped_dependency_continues_propagation() -> None:
+    workflow = _workflow(
+        [
+            {"id": "a", "handler": "task", "dependencies": []},
+            {"id": "b", "handler": "task", "dependencies": ["a"]},
+            {"id": "c", "handler": "task", "dependencies": ["b"]},
+        ]
+    )
+
+    skipped = evaluate_failed_dependency_node_ids(
+        workflow,
+        {"a": NodeExecutionStatus.FAILED, "b": NodeExecutionStatus.SKIPPED},
+    )
+
+    assert skipped == ("c",)

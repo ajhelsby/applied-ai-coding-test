@@ -51,3 +51,13 @@ class NodeExecutionRepository(Protocol):
         node_ids: Sequence[str],
     ) -> tuple[str, ...]:
         """Atomically promote pending nodes to ready and return claimed node IDs."""
+
+    async def skip_pending_or_ready_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+        *,
+        reason: str,
+        completed_at: datetime,
+    ) -> tuple[str, ...]:
+        """Atomically skip eligible nodes and return the nodes transitioned."""
