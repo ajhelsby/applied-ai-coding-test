@@ -34,6 +34,8 @@ class FakeNodeExecutions:
                 node_id=node_id,
                 status=status,
                 output_data=self.outputs.get(node_id, {}),
+                error_message=self.errors.get(node_id, (None, None))[0],
+                error_type=self.errors.get(node_id, (None, None))[1],
             )
             for node_id, status in self.statuses.items()
         ]
@@ -74,6 +76,26 @@ class FakeNodeExecutions:
         for node_id in claimed_ids:
             self.statuses[node_id] = NodeExecutionStatus.READY
         return claimed_ids
+
+    async def skip_pending_or_ready_nodes(
+        self,
+        _execution_id: UUID,
+        node_ids: Sequence[str],
+        *,
+        reason: str,
+        completed_at: object,
+    ) -> tuple[str, ...]:
+        del completed_at
+        skipped_ids = tuple(
+            node_id
+            for node_id in node_ids
+            if self.statuses.get(node_id)
+            in {NodeExecutionStatus.PENDING, NodeExecutionStatus.READY}
+        )
+        for node_id in skipped_ids:
+            self.statuses[node_id] = NodeExecutionStatus.SKIPPED
+            self.errors[node_id] = (reason, "FailedDependency")
+        return skipped_ids
 
 
 class FakeWorkflowExecutions:
@@ -352,7 +374,127 @@ def test_failed_completion_persists_error_and_fails_workflow() -> None:
     assert uow.node_executions.statuses["root"] is NodeExecutionStatus.FAILED
     assert uow.node_executions.outputs["root"] is None
     assert uow.node_executions.errors["root"] == ("handler failed", "RuntimeError")
-    assert uow.node_executions.statuses["child"] is NodeExecutionStatus.PENDING
+    assert uow.node_executions.statuses["child"] is NodeExecutionStatus.SKIPPED
+    assert uow.node_executions.errors["child"] == (
+        "Dependency 'root' failed.",
+        "FailedDependency",
+    )
+    assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.FAILED
+
+
+def test_failed_completion_skips_multi_level_dependants_and_preserves_independent_nodes() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
+    workflow = _workflow(
+        execution.workflow_id,
+        [
+            {"id": "root", "handler": "task", "dependencies": []},
+            {"id": "left", "handler": "task", "dependencies": ["root"]},
+            {"id": "right", "handler": "task", "dependencies": ["root"]},
+            {"id": "join", "handler": "task", "dependencies": ["left", "right"]},
+            {"id": "independent", "handler": "task", "dependencies": []},
+        ],
+    )
+    uow = FakeUnitOfWork(
+        execution,
+        workflow,
+        {
+            "root": NodeExecutionStatus.RUNNING,
+            "left": NodeExecutionStatus.PENDING,
+            "right": NodeExecutionStatus.READY,
+            "join": NodeExecutionStatus.PENDING,
+            "independent": NodeExecutionStatus.PENDING,
+        },
+    )
+
+    asyncio.run(
+        TaskCompletionService().process(
+            _event(execution.execution_id, "root", TaskCompletionStatus.FAILED), uow
+        )
+    )
+
+    assert uow.node_executions.statuses == {
+        "root": NodeExecutionStatus.FAILED,
+        "left": NodeExecutionStatus.SKIPPED,
+        "right": NodeExecutionStatus.SKIPPED,
+        "join": NodeExecutionStatus.SKIPPED,
+        "independent": NodeExecutionStatus.PENDING,
+    }
+    assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.FAILED
+
+
+def test_duplicate_failed_completion_does_not_repeat_skip_transitions() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.FAILED)
+    workflow = _workflow(
+        execution.workflow_id,
+        [
+            {"id": "root", "handler": "task", "dependencies": []},
+            {"id": "child", "handler": "task", "dependencies": ["root"]},
+        ],
+    )
+    uow = FakeUnitOfWork(
+        execution,
+        workflow,
+        {
+            "root": NodeExecutionStatus.FAILED,
+            "child": NodeExecutionStatus.SKIPPED,
+        },
+    )
+    uow.node_executions.errors["root"] = ("original failure", "RuntimeError")
+    uow.node_executions.errors["child"] = ("Dependency 'root' failed.", "FailedDependency")
+
+    decision = asyncio.run(
+        TaskCompletionService().process(
+            _event(execution.execution_id, "root", TaskCompletionStatus.FAILED), uow
+        )
+    )
+
+    assert decision.outcome is TaskCompletionOutcome.DUPLICATE
+    assert uow.node_executions.errors == {
+        "root": ("original failure", "RuntimeError"),
+        "child": ("Dependency 'root' failed.", "FailedDependency"),
+    }
+
+
+def test_concurrent_failed_completions_propagate_once() -> None:
+    execution = WorkflowExecution(workflow_id=uuid4(), status=WorkflowExecutionStatus.RUNNING)
+    workflow = _workflow(
+        execution.workflow_id,
+        [
+            {"id": "root", "handler": "task", "dependencies": []},
+            {"id": "child", "handler": "task", "dependencies": ["root"]},
+        ],
+    )
+    uow = FakeUnitOfWork(
+        execution,
+        workflow,
+        {
+            "root": NodeExecutionStatus.RUNNING,
+            "child": NodeExecutionStatus.PENDING,
+        },
+    )
+
+    async def process_both_failures() -> list[TaskCompletionDecision]:
+        return list(
+            await asyncio.gather(
+                TaskCompletionService().process(
+                    _event(execution.execution_id, "root", TaskCompletionStatus.FAILED), uow
+                ),
+                TaskCompletionService().process(
+                    _event(execution.execution_id, "root", TaskCompletionStatus.FAILED), uow
+                ),
+            )
+        )
+
+    decisions = asyncio.run(process_both_failures())
+
+    assert sorted(decision.outcome for decision in decisions) == [
+        TaskCompletionOutcome.DUPLICATE,
+        TaskCompletionOutcome.PROCESSED,
+    ]
+    assert uow.node_executions.statuses == {
+        "root": NodeExecutionStatus.FAILED,
+        "child": NodeExecutionStatus.SKIPPED,
+    }
     assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.FAILED
 
 
