@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 
 import pytest
 
@@ -12,6 +13,8 @@ from app.worker import main
 def _task_fields(task_id: str) -> dict[str, str]:
     return {
         "task_id": task_id,
+        "attempt_id": str(uuid4()),
+        "attempt_number": "1",
         "execution_id": "76c8dc7e-a3ca-4a31-b951-36501a0d8a1c",
         "node_id": "node-1",
         "handler": "input",
