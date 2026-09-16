@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
+from importlib import import_module, reload
 
 import psycopg2
 import pytest
@@ -79,6 +81,13 @@ def api_client(
     """Create a FastAPI client after application configuration is available."""
 
     del integration_infrastructure, clean_test_data
+    reload(import_module("app.db.session"))
+    reload(import_module("app.infrastructure.persistence.unit_of_work"))
+    reload(import_module("app.infrastructure.persistence.providers"))
+    if "app.api.workflows" in sys.modules:
+        reload(import_module("app.api.workflows"))
+    if "app.api.main" in sys.modules:
+        reload(import_module("app.api.main"))
     from app.api.main import app
 
     with TestClient(app) as client:

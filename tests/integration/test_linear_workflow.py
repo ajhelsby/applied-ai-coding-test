@@ -23,7 +23,11 @@ def test_linear_workflow_executes_asynchronously(
 ) -> None:
     """Submit, trigger, and retrieve a real A -> B -> C workflow."""
 
-    del application_services
+    orchestrator, worker = application_services
+
+    def service_diagnostics() -> str:
+        return f"orchestrator_output:\n{orchestrator.output()}\nworker_output:\n{worker.output()}"
+
     workflow_name = f"linear-integration-{uuid4()}"
     response = api_client.post(
         "/workflow",
@@ -34,15 +38,15 @@ def test_linear_workflow_executes_asynchronously(
                     {"id": "A", "handler": "input", "dependencies": []},
                     {
                         "id": "B",
-                        "handler": "llm_service",
+                        "handler": "call_external_service",
                         "dependencies": ["A"],
-                        "config": {"prompt": "B received {{ A.value }}"},
+                        "config": {"url": "https://example.test/{{ A.value }}"},
                     },
                     {
                         "id": "C",
-                        "handler": "llm_service",
-                        "dependencies": ["A", "B"],
-                        "config": {"prompt": "C received {{ B.response }} from {{ A.value }}"},
+                        "handler": "call_external_service",
+                        "dependencies": ["B"],
+                        "config": {"url": "https://example.test/{{ B.url }}"},
                     },
                 ]
             },
@@ -61,8 +65,20 @@ def test_linear_workflow_executes_asynchronously(
     def fetch_status() -> object:
         return api_client.get(f"/workflows/{execution_id}").json()
 
-    after_a = wait_for_node_status(fetch_status, str(execution_id), "A", "COMPLETED")
-    after_b = wait_for_node_status(fetch_status, str(execution_id), "B", "COMPLETED")
+    after_a = wait_for_node_status(
+        fetch_status,
+        str(execution_id),
+        "A",
+        "COMPLETED",
+        diagnostics=service_diagnostics,
+    )
+    after_b = wait_for_node_status(
+        fetch_status,
+        str(execution_id),
+        "B",
+        "COMPLETED",
+        diagnostics=service_diagnostics,
+    )
 
     node_a = next(node for node in after_b["nodes"] if node["node_id"] == "A")
     node_b = next(node for node in after_b["nodes"] if node["node_id"] == "B")
@@ -79,6 +95,7 @@ def test_linear_workflow_executes_asynchronously(
         fetch_status,
         str(execution_id),
         "COMPLETED",
+        diagnostics=service_diagnostics,
     )
     assert completed["status"] == "COMPLETED"
 
@@ -90,6 +107,11 @@ def test_linear_workflow_executes_asynchronously(
     results = {result["node_id"]: result for result in results_payload["results"]}
     assert set(results) == {"A", "B", "C"}
     assert results["A"]["output_data"] == {"value": "integration-value"}
-    assert "integration-value" in results["B"]["output_data"]["response"]
-    assert results["B"]["output_data"]["response"] in results["C"]["output_data"]["response"]
-    assert "integration-value" in results["C"]["output_data"]["response"]
+    assert results["B"]["output_data"]["url"] == "https://example.test/integration-value"
+    assert results["B"]["output_data"]["input"] == {"url": "https://example.test/integration-value"}
+    assert results["C"]["output_data"]["url"] == (
+        "https://example.test/https://example.test/integration-value"
+    )
+    assert results["C"]["output_data"]["input"] == {
+        "url": "https://example.test/https://example.test/integration-value"
+    }

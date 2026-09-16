@@ -54,7 +54,7 @@ def external_infrastructure() -> InfrastructureConfig | None:
     if database_url is None and redis_url is None:
         return None
     if database_url is None or redis_url is None:
-        raise RuntimeError(f"{DATABASE_URL_ENV} and {REDIS_URL_ENV} must be configured together.")
+        return None
 
     return InfrastructureConfig(
         database_url=_normalize_database_url(
@@ -95,7 +95,7 @@ def selected_infrastructure() -> Iterator[InfrastructureConfig]:
         redis.start()
         yield InfrastructureConfig(
             database_url=_normalize_database_url(postgres.get_connection_url()),
-            redis_url=redis.get_connection_url(),
+            redis_url=(f"redis://{redis.get_container_host_ip()}:{redis.get_exposed_port(6379)}/0"),
             provider="testcontainers",
         )
     finally:

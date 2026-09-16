@@ -23,8 +23,11 @@ def configure_environment(infrastructure: InfrastructureConfig) -> None:
     """Expose selected infrastructure to application and migration code."""
 
     os.environ["DATABASE_URL"] = infrastructure.database_url
-    os.environ["MIGRATE_DATABASE_URL"] = infrastructure.database_url
+    os.environ["MIGRATE_DATABASE_URL"] = infrastructure.database_url.replace(
+        "+asyncpg", "+psycopg2"
+    )
     os.environ["REDIS_URL"] = infrastructure.redis_url
+    os.environ["INTEGRATION_TEST"] = "1"
 
 
 def apply_database_migrations(infrastructure: InfrastructureConfig) -> None:
@@ -32,7 +35,12 @@ def apply_database_migrations(infrastructure: InfrastructureConfig) -> None:
 
     configure_environment(infrastructure)
     alembic_config = Config(str(_ROOT_DIRECTORY / "alembic.ini"))
-    command.upgrade(alembic_config, "head")
+    database_url = os.environ["DATABASE_URL"]
+    os.environ["ALEMBIC_DATABASE_URL"] = database_url.replace("+asyncpg", "+psycopg2")
+    try:
+        command.upgrade(alembic_config, "heads")
+    finally:
+        os.environ.pop("ALEMBIC_DATABASE_URL", None)
 
 
 def initialize_redis_streams(infrastructure: InfrastructureConfig) -> None:
