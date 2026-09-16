@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
@@ -20,6 +21,8 @@ from app.services.task_completion_service import (
     TaskCompletionService,
 )
 from app.services.workflow_dispatch_service import WorkflowDispatchService
+
+logger = logging.getLogger(__name__)
 
 
 class TaskCompletionProcessor(Protocol):
@@ -71,9 +74,21 @@ class TaskCompletionConsumer:
         processed = 0
         for stream, stream_messages in messages:
             for message_id, fields in stream_messages:
+                logger.info(
+                    "Orchestrator received task completion",
+                    extra={"message_id": message_id, "stream": stream},
+                )
                 event = TaskCompletionEvent.from_stream_fields(fields)
                 decision = await self._completion_service.process(
                     event, self._unit_of_work_factory()
+                )
+                logger.info(
+                    "Orchestrator persisted task completion",
+                    extra={
+                        "message_id": message_id,
+                        "execution_id": str(event.execution_id),
+                        "node_id": event.node_id,
+                    },
                 )
                 if isinstance(decision, TaskCompletionDecision):
                     await self._dispatch_service.dispatch_ready(
@@ -81,6 +96,17 @@ class TaskCompletionConsumer:
                         decision.ready_node_ids,
                         self._unit_of_work_factory,
                     )
+                    logger.info(
+                        "Orchestrator dispatched ready nodes",
+                        extra={
+                            "execution_id": str(event.execution_id),
+                            "ready_node_ids": decision.ready_node_ids,
+                        },
+                    )
                 await ack(stream, ORCHESTRATOR_COMPLETIONS_GROUP, message_id)
+                logger.info(
+                    "Orchestrator acknowledged task completion",
+                    extra={"message_id": message_id, "stream": stream},
+                )
                 processed += 1
         return processed

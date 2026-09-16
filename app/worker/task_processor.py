@@ -63,7 +63,24 @@ class WorkerTaskProcessor:
         """Execute a task, publish its terminal event, then acknowledge it."""
 
         if self._unit_of_work_factory is not None:
+            logger.info(
+                "Worker claiming task",
+                extra={
+                    "task_id": task.task_id,
+                    "attempt_id": str(task.attempt_id),
+                    "execution_id": str(task.execution_id),
+                    "node_id": task.node_id,
+                },
+            )
             claim_outcome = await self._claim_task(task)
+            logger.info(
+                "Worker task claim completed",
+                extra={
+                    "task_id": task.task_id,
+                    "attempt_id": str(task.attempt_id),
+                    "claim_outcome": claim_outcome.value,
+                },
+            )
             if claim_outcome is not TaskClaimOutcome.CLAIMED:
                 if claim_outcome is TaskClaimOutcome.RESULT_RECORDED:
                     event = await self._replay_result(task)
@@ -138,7 +155,15 @@ class WorkerTaskProcessor:
         )
         try:
             try:
+                logger.info(
+                    "Worker executing claimed task",
+                    extra={"task_id": task.task_id, "node_id": task.node_id},
+                )
                 output = await self._executor.execute(task)
+                logger.info(
+                    "Worker handler completed",
+                    extra={"task_id": task.task_id, "node_id": task.node_id},
+                )
             except Exception as error:
                 event = self._failure_event(task, error)
             else:
@@ -162,7 +187,15 @@ class WorkerTaskProcessor:
             claim_renewal.cancel()
             with suppress(asyncio.CancelledError):
                 await claim_renewal
+        logger.info(
+            "Worker recording task result",
+            extra={"task_id": task.task_id, "node_id": task.node_id},
+        )
         await self._record_result(event)
+        logger.info(
+            "Worker recorded task result",
+            extra={"task_id": task.task_id, "node_id": task.node_id},
+        )
         return event
 
     async def _renew_claim_until_complete(self, task: NodeTaskMessage) -> None:
@@ -235,9 +268,17 @@ class WorkerTaskProcessor:
         message_id: str,
         event: TaskCompletionEvent,
     ) -> None:
+        logger.info(
+            "Worker publishing completion event",
+            extra={"task_id": event.task_id, "node_id": event.node_id},
+        )
         await self._completion_publisher(
             WORKFLOW_TASK_COMPLETIONS_STREAM,
             event.to_stream_fields(),
+        )
+        logger.info(
+            "Worker completion event published",
+            extra={"task_id": event.task_id, "node_id": event.node_id},
         )
         unit_of_work = self._unit_of_work_factory
         if unit_of_work is None:
@@ -254,7 +295,15 @@ class WorkerTaskProcessor:
                     task_id=event.task_id,
                     completed_at=datetime.now(UTC),
                 )
+        logger.info(
+            "Worker task marked completed",
+            extra={"task_id": event.task_id, "node_id": event.node_id},
+        )
         await self._acknowledger(stream, WORKFLOW_TASKS_GROUP, message_id)
+        logger.info(
+            "Worker task acknowledged",
+            extra={"task_id": event.task_id, "node_id": event.node_id},
+        )
 
     @staticmethod
     def _event_from_result(

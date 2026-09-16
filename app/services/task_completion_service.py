@@ -136,7 +136,7 @@ class TaskCompletionService:
                         completion_event_id=event.event_id,
                         completed_at=datetime.now(UTC),
                     )
-                    if not recorded:
+                    if not recorded and existing_node.status is not NodeExecutionStatus.RUNNING:
                         return TaskCompletionDecision(
                             event_id=str(event.event_id),
                             execution_id=str(event.execution_id),

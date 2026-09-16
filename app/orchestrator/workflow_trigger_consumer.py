@@ -47,6 +47,11 @@ class WorkflowTriggerConsumer:
         processed = 0
         for stream, stream_messages in messages:
             for message_id, fields in stream_messages:
+                event_type = required_field(fields, "event_type", "Workflow event")
+                if event_type != _EXECUTION_TRIGGERED_EVENT_TYPE:
+                    await ack(stream, _ORCHESTRATOR_EVENTS_GROUP, message_id)
+                    processed += 1
+                    continue
                 execution_id = self._execution_id(fields)
                 readiness = await self._readiness_service.evaluate(
                     execution_id,

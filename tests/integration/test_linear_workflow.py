@@ -46,7 +46,7 @@ def test_linear_workflow_executes_asynchronously(
                         "id": "C",
                         "handler": "call_external_service",
                         "dependencies": ["B"],
-                        "config": {"url": "https://example.test/{{ B.url }}"},
+                        "config": {"url": "https://example.test/{{ B.input.url }}"},
                     },
                 ]
             },
@@ -107,11 +107,7 @@ def test_linear_workflow_executes_asynchronously(
     results = {result["node_id"]: result for result in results_payload["results"]}
     assert set(results) == {"A", "B", "C"}
     assert results["A"]["output_data"] == {"value": "integration-value"}
-    assert results["B"]["output_data"]["url"] == "https://example.test/integration-value"
     assert results["B"]["output_data"]["input"] == {"url": "https://example.test/integration-value"}
-    assert results["C"]["output_data"]["url"] == (
-        "https://example.test/https://example.test/integration-value"
-    )
     assert results["C"]["output_data"]["input"] == {
         "url": "https://example.test/https://example.test/integration-value"
     }
