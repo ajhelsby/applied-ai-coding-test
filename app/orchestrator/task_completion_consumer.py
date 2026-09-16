@@ -14,7 +14,11 @@ from app.messaging.redis.streams import (
     consume,
 )
 from app.messaging.task_completion import TaskCompletionEvent
-from app.services.task_completion_service import TaskCompletionDecision, TaskCompletionService
+from app.services.task_completion_service import (
+    RetryPolicy,
+    TaskCompletionDecision,
+    TaskCompletionService,
+)
 from app.services.workflow_dispatch_service import WorkflowDispatchService
 
 
@@ -49,7 +53,9 @@ class TaskCompletionConsumer:
     ) -> None:
         self._consumer_name = consumer_name
         self._unit_of_work_factory = unit_of_work_factory
-        self._completion_service = completion_service or TaskCompletionService()
+        self._completion_service = completion_service or TaskCompletionService(
+            retry_policy=RetryPolicy.from_environment()
+        )
         self._dispatch_service = dispatch_service or WorkflowDispatchService()
 
     async def consume_once(self) -> int:

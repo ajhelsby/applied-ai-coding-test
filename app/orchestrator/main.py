@@ -12,6 +12,7 @@ from app.messaging.redis.client import close_async_redis_client
 from app.orchestrator.outbox import publish_outbox_events
 from app.orchestrator.task_completion_consumer import TaskCompletionConsumer
 from app.orchestrator.workflow_trigger_consumer import WorkflowTriggerConsumer
+from app.services.node_task_dispatcher import RedisNodeTaskDispatcher
 
 logger = logging.getLogger(__name__)
 running = True
@@ -31,6 +32,7 @@ async def run() -> None:
         consumer_name=os.getenv("ORCHESTRATOR_CONSUMER_NAME", socket.gethostname()),
         unit_of_work_factory=SqlAlchemyUnitOfWork,
     )
+    retry_dispatcher = RedisNodeTaskDispatcher()
     trigger_consumer = WorkflowTriggerConsumer(
         consumer_name=os.getenv("ORCHESTRATOR_CONSUMER_NAME", socket.gethostname()),
         unit_of_work_factory=SqlAlchemyUnitOfWork,
@@ -47,6 +49,9 @@ async def run() -> None:
             completed = await consumer.consume_once()
             if completed:
                 logger.info("Processed task completion events", extra={"event_count": completed})
+            retries = await retry_dispatcher.publish_due_retries(SqlAlchemyUnitOfWork)
+            if retries:
+                logger.info("Published due task retries", extra={"retry_count": retries})
         except RedisError:
             logger.exception("Unable to communicate with Redis; will retry")
         await asyncio.sleep(poll_interval_seconds)

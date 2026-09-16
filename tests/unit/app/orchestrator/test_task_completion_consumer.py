@@ -22,6 +22,8 @@ def test_consumer_processes_and_acknowledges_completion_event(
     fields = {
         "event_id": str(uuid4()),
         "task_id": create_task_id(execution_id, "node"),
+        "attempt_id": str(uuid4()),
+        "attempt_number": "1",
         "execution_id": str(execution_id),
         "node_id": "node",
         "status": "completed",

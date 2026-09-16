@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from json import dumps
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +17,8 @@ class NodeTaskMessage(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     task_id: str = Field(min_length=1)
+    attempt_id: UUID = Field(default_factory=uuid4)
+    attempt_number: int = Field(default=1, ge=1)
     execution_id: UUID
     node_id: str = Field(min_length=1)
     handler: str = Field(min_length=1)
@@ -30,6 +32,8 @@ class NodeTaskMessage(BaseModel):
         return cls.model_validate(
             {
                 "task_id": required_field(fields, "task_id", "Task message"),
+                "attempt_id": required_field(fields, "attempt_id", "Task message"),
+                "attempt_number": required_field(fields, "attempt_number", "Task message"),
                 "execution_id": required_field(fields, "execution_id", "Task message"),
                 "node_id": required_field(fields, "node_id", "Task message"),
                 "handler": required_field(fields, "handler", "Task message"),
@@ -43,6 +47,8 @@ class NodeTaskMessage(BaseModel):
 
         return {
             "task_id": self.task_id,
+            "attempt_id": str(self.attempt_id),
+            "attempt_number": str(self.attempt_number),
             "execution_id": str(self.execution_id),
             "node_id": self.node_id,
             "handler": self.handler,

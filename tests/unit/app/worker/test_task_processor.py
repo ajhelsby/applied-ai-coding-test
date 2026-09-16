@@ -359,6 +359,8 @@ def test_processor_reports_and_acknowledges_malformed_task_with_recoverable_iden
             "2-0",
             {
                 "task_id": "task-1",
+                "attempt_id": str(uuid4()),
+                "attempt_number": "1",
                 "execution_id": str(execution_id),
                 "node_id": "node-1",
             },

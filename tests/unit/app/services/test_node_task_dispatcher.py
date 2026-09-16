@@ -118,6 +118,8 @@ def test_dispatch_publishes_task_after_claiming_node() -> None:
     assert published == [
         {
             "task_id": result.task_id,
+            "attempt_id": published[0]["attempt_id"],
+            "attempt_number": "1",
             "execution_id": str(execution.execution_id),
             "node_id": node.id,
             "handler": "example.handler",

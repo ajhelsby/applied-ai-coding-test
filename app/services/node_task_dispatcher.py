@@ -8,12 +8,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
 from redis.exceptions import RedisError
 
 from app.domain.models.execution import WorkflowExecution
 from app.domain.models.node import WorkflowNode
+from app.domain.repositories.task_retry_repository import TaskRetryRepository
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
 from app.messaging.redis.streams import WORKFLOW_TASKS_STREAM, publish
@@ -113,6 +114,19 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                 new_status=NodeExecutionStatus.RUNNING,
                 started_at=datetime.now(UTC),
             )
+            attempt_id = uuid4()
+            retry_repository = self._retry_repository(transaction)
+            if claimed and retry_repository is not None:
+                attempt_id = await retry_repository.register_initial_task(
+                    task_id=task_id,
+                    execution_id=execution.execution_id,
+                    node_id=node.id,
+                    handler=node.handler,
+                    handler_config=node.config,
+                    resolved_input=resolved_input,
+                    attempt_id=attempt_id,
+                    started_at=datetime.now(UTC),
+                )
 
         if not claimed:
             return DispatchResult(
@@ -128,6 +142,8 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                 WORKFLOW_TASKS_STREAM,
                 NodeTaskMessage(
                     task_id=task_id,
+                    attempt_id=attempt_id,
+                    attempt_number=1,
                     execution_id=execution.execution_id,
                     node_id=node.id,
                     handler=node.handler,
@@ -159,6 +175,50 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
             task_id=task_id,
             outcome=DispatchOutcome.DISPATCHED,
         )
+
+    async def publish_due_retries(
+        self,
+        unit_of_work_factory: UnitOfWorkFactory,
+        now: datetime | None = None,
+    ) -> int:
+        """Publish due retry attempts and durably mark each publication."""
+
+        available_at = now or datetime.now(UTC)
+        unit_of_work = unit_of_work_factory()
+        async with unit_of_work.transaction() as transaction:
+            retry_repository = self._retry_repository(transaction)
+            if retry_repository is None:
+                return 0
+            due_retries = await retry_repository.get_due_retries(available_at)
+
+        published = 0
+        for retry in due_retries:
+            await self._task_publisher(
+                WORKFLOW_TASKS_STREAM,
+                NodeTaskMessage(
+                    task_id=retry.task_id,
+                    attempt_id=retry.attempt_id,
+                    attempt_number=retry.attempt_number,
+                    execution_id=retry.execution_id,
+                    node_id=retry.node_id,
+                    handler=retry.handler,
+                    handler_config=retry.handler_config,
+                    resolved_input=retry.resolved_input,
+                ).to_stream_fields(),
+            )
+            async with unit_of_work_factory().transaction() as transaction:
+                retry_repository = self._retry_repository(transaction)
+                if retry_repository is not None and await retry_repository.mark_retry_published(
+                    retry.attempt_id, available_at
+                ):
+                    published += 1
+        return published
+
+    @staticmethod
+    def _retry_repository(transaction: UnitOfWork) -> TaskRetryRepository | None:
+        if not hasattr(transaction, "task_retries"):
+            return None
+        return transaction.task_retries
 
     async def dispatch_many(
         self,

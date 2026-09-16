@@ -8,11 +8,14 @@ from app.services.node_task_dispatcher import create_task_id
 
 def test_parses_successful_completion_event() -> None:
     execution_id = uuid4()
+    attempt_id = uuid4()
 
     event = TaskCompletionEvent.from_stream_fields(
         {
             "event_id": str(uuid4()),
             "task_id": create_task_id(execution_id, "node"),
+            "attempt_id": str(attempt_id),
+            "attempt_number": "1",
             "execution_id": str(execution_id),
             "node_id": "node",
             "status": "completed",
@@ -21,6 +24,8 @@ def test_parses_successful_completion_event() -> None:
     )
 
     assert event.status is TaskCompletionStatus.COMPLETED
+    assert event.attempt_id == attempt_id
+    assert event.attempt_number == 1
     assert event.output_data == {"answer": 42}
 
 
@@ -31,6 +36,8 @@ def test_parses_successful_completion_event_with_structured_array_output() -> No
         {
             "event_id": str(uuid4()),
             "task_id": create_task_id(execution_id, "node"),
+            "attempt_id": str(uuid4()),
+            "attempt_number": "1",
             "execution_id": str(execution_id),
             "node_id": "node",
             "status": "completed",
@@ -48,6 +55,8 @@ def test_parses_successful_completion_event_with_null_output() -> None:
         {
             "event_id": str(uuid4()),
             "task_id": create_task_id(execution_id, "node"),
+            "attempt_id": str(uuid4()),
+            "attempt_number": "1",
             "execution_id": str(execution_id),
             "node_id": "node",
             "status": "completed",
@@ -91,6 +100,8 @@ def test_parses_failed_completion_event() -> None:
         {
             "event_id": str(uuid4()),
             "task_id": create_task_id(execution_id, "node"),
+            "attempt_id": str(uuid4()),
+            "attempt_number": "1",
             "execution_id": str(execution_id),
             "node_id": "node",
             "status": "failed",

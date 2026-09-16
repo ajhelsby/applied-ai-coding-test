@@ -10,8 +10,11 @@ from app.messaging.task_messages import NodeTaskMessage
 
 def test_parses_and_serializes_self_contained_task_message() -> None:
     execution_id = uuid4()
+    attempt_id = uuid4()
     fields = {
         "task_id": "task-1",
+        "attempt_id": str(attempt_id),
+        "attempt_number": "1",
         "execution_id": str(execution_id),
         "node_id": "node-1",
         "handler": "call_external_service",
@@ -22,6 +25,8 @@ def test_parses_and_serializes_self_contained_task_message() -> None:
     task = NodeTaskMessage.from_stream_fields(fields)
 
     assert task.execution_id == execution_id
+    assert task.attempt_id == attempt_id
+    assert task.attempt_number == 1
     assert task.handler == "call_external_service"
     assert task.handler_config == {"url": "https://example.com"}
     assert task.resolved_input == {"query": "hello"}
@@ -33,6 +38,8 @@ def test_rejects_task_with_invalid_handler_config() -> None:
         NodeTaskMessage.from_stream_fields(
             {
                 "task_id": "task-1",
+                "attempt_id": str(uuid4()),
+                "attempt_number": "1",
                 "execution_id": str(uuid4()),
                 "node_id": "node-1",
                 "handler": "input",
@@ -47,6 +54,8 @@ def test_rejects_task_with_invalid_execution_identifier() -> None:
         NodeTaskMessage.from_stream_fields(
             {
                 "task_id": "task-1",
+                "attempt_id": str(uuid4()),
+                "attempt_number": "1",
                 "execution_id": "not-a-uuid",
                 "node_id": "node-1",
                 "handler": "input",
