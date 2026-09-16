@@ -49,12 +49,13 @@ class FakeTaskProcessing:
     async def claim_task(
         self,
         task_id: str,
-        _execution_id: UUID,
-        _node_id: str,
-        _worker_id: str,
-        _claimed_at: datetime,
-        _claim_expires_at: datetime,
+        execution_id: UUID,
+        node_id: str,
+        worker_id: str,
+        claimed_at: datetime,
+        claim_expires_at: datetime,
     ) -> TaskClaimOutcome:
+        del execution_id, node_id, worker_id, claimed_at, claim_expires_at
         async with self.claim_lock:
             status = self.statuses.get(task_id)
             if status == "completed":
@@ -85,15 +86,17 @@ class FakeTaskProcessing:
     async def get_result(self, task_id: str) -> TaskProcessingResult:
         return self.results[task_id]
 
-    async def mark_completed(self, task_id: str, _completed_at: datetime) -> None:
+    async def mark_completed(self, task_id: str, completed_at: datetime) -> None:
+        del completed_at
         self.statuses[task_id] = "completed"
 
     async def renew_claim(
         self,
-        _task_id: str,
-        _worker_id: str,
-        _claim_expires_at: datetime,
+        task_id: str,
+        worker_id: str,
+        claim_expires_at: datetime,
     ) -> bool:
+        del task_id, worker_id, claim_expires_at
         return True
 
 
