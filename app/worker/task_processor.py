@@ -10,6 +10,9 @@ from datetime import UTC, datetime, timedelta
 from json import dumps
 from uuid import UUID, uuid4
 
+from app.domain.repositories.task_attempt_processing_repository import (
+    TaskAttemptProcessingRepository,
+)
 from app.domain.repositories.task_processing_repository import (
     TaskClaimOutcome,
     TaskProcessingResult,
@@ -116,6 +119,8 @@ class WorkerTaskProcessor:
                 event = TaskCompletionEvent(
                     event_id=uuid4(),
                     task_id=task.task_id,
+                    attempt_id=task.attempt_id,
+                    attempt_number=task.attempt_number,
                     execution_id=task.execution_id,
                     node_id=task.node_id,
                     status=TaskCompletionStatus.COMPLETED,
@@ -128,8 +133,8 @@ class WorkerTaskProcessor:
         """Execute a claimed task and persist its result before publication."""
 
         claim_renewal = asyncio.create_task(
-            self._renew_claim_until_complete(task.task_id),
-            name=f"worker-claim-renewal-{task.task_id}",
+            self._renew_claim_until_complete(task),
+            name=f"worker-claim-renewal-{task.attempt_id}",
         )
         try:
             try:
@@ -146,6 +151,8 @@ class WorkerTaskProcessor:
                     event = TaskCompletionEvent(
                         event_id=uuid4(),
                         task_id=task.task_id,
+                        attempt_id=task.attempt_id,
+                        attempt_number=task.attempt_number,
                         execution_id=task.execution_id,
                         node_id=task.node_id,
                         status=TaskCompletionStatus.COMPLETED,
@@ -158,7 +165,7 @@ class WorkerTaskProcessor:
         await self._record_result(event)
         return event
 
-    async def _renew_claim_until_complete(self, task_id: str) -> None:
+    async def _renew_claim_until_complete(self, task: NodeTaskMessage) -> None:
         """Keep an active claim valid while its handler is running."""
 
         interval_seconds = max(self._task_claim_lease_seconds / 3, 0.1)
@@ -169,33 +176,57 @@ class WorkerTaskProcessor:
             if unit_of_work is None:
                 raise RuntimeError("A unit-of-work factory is required to renew worker claims.")
             async with unit_of_work().transaction() as transaction:
-                renewed = await transaction.task_processing.renew_claim(
-                    task_id=task_id,
-                    worker_id=self._worker_id,
-                    claim_expires_at=expires_at,
-                )
+                attempt_repository = self._attempt_repository(transaction)
+                if attempt_repository is not None:
+                    renewed = await attempt_repository.renew_claim(
+                        attempt_id=task.attempt_id,
+                        worker_id=self._worker_id,
+                        claim_expires_at=expires_at,
+                    )
+                else:
+                    renewed = await transaction.task_processing.renew_claim(
+                        task_id=task.task_id,
+                        worker_id=self._worker_id,
+                        claim_expires_at=expires_at,
+                    )
             if not renewed:
-                raise RuntimeError(f"Worker claim for task '{task_id}' is no longer active.")
+                raise RuntimeError(
+                    f"Worker claim for attempt '{task.attempt_id}' is no longer active."
+                )
 
     async def _record_result(self, event: TaskCompletionEvent) -> None:
         unit_of_work = self._unit_of_work_factory
         if unit_of_work is None:
             raise RuntimeError("A unit-of-work factory is required to record worker results.")
         async with unit_of_work().transaction() as transaction:
-            await transaction.task_processing.record_result(
-                task_id=event.task_id,
-                event_id=event.event_id,
-                result_data=event.output_data,
-                error_message=event.error_message,
-                error_type=event.error_type,
-            )
+            attempt_repository = self._attempt_repository(transaction)
+            if attempt_repository is not None:
+                await attempt_repository.record_result(
+                    attempt_id=event.attempt_id,
+                    event_id=event.event_id,
+                    result_data=event.output_data,
+                    error_message=event.error_message,
+                    error_type=event.error_type,
+                )
+            else:
+                await transaction.task_processing.record_result(
+                    task_id=event.task_id,
+                    event_id=event.event_id,
+                    result_data=event.output_data,
+                    error_message=event.error_message,
+                    error_type=event.error_type,
+                )
 
     async def _replay_result(self, task: NodeTaskMessage) -> TaskCompletionEvent:
         unit_of_work = self._unit_of_work_factory
         if unit_of_work is None:
             raise RuntimeError("A unit-of-work factory is required to replay worker results.")
         async with unit_of_work().transaction() as transaction:
-            result = await transaction.task_processing.get_result(task.task_id)
+            attempt_repository = self._attempt_repository(transaction)
+            if attempt_repository is not None:
+                result = await attempt_repository.get_result(task.attempt_id)
+            else:
+                result = await transaction.task_processing.get_result(task.task_id)
         return self._event_from_result(task, result)
 
     async def _publish_complete_and_ack(
@@ -212,10 +243,17 @@ class WorkerTaskProcessor:
         if unit_of_work is None:
             raise RuntimeError("A unit-of-work factory is required to complete worker tasks.")
         async with unit_of_work().transaction() as transaction:
-            await transaction.task_processing.mark_completed(
-                task_id=event.task_id,
-                completed_at=datetime.now(UTC),
-            )
+            attempt_repository = self._attempt_repository(transaction)
+            if attempt_repository is not None:
+                await attempt_repository.mark_completed(
+                    attempt_id=event.attempt_id,
+                    completed_at=datetime.now(UTC),
+                )
+            else:
+                await transaction.task_processing.mark_completed(
+                    task_id=event.task_id,
+                    completed_at=datetime.now(UTC),
+                )
         await self._acknowledger(stream, WORKFLOW_TASKS_GROUP, message_id)
 
     @staticmethod
@@ -229,6 +267,8 @@ class WorkerTaskProcessor:
             return TaskCompletionEvent(
                 event_id=result.event_id,
                 task_id=task.task_id,
+                attempt_id=task.attempt_id,
+                attempt_number=task.attempt_number,
                 execution_id=task.execution_id,
                 node_id=task.node_id,
                 status=TaskCompletionStatus.FAILED,
@@ -238,6 +278,8 @@ class WorkerTaskProcessor:
         return TaskCompletionEvent(
             event_id=result.event_id,
             task_id=task.task_id,
+            attempt_id=task.attempt_id,
+            attempt_number=task.attempt_number,
             execution_id=task.execution_id,
             node_id=task.node_id,
             status=TaskCompletionStatus.COMPLETED,
@@ -253,6 +295,17 @@ class WorkerTaskProcessor:
         if unit_of_work is None:
             raise RuntimeError("A unit-of-work factory is required to claim worker tasks.")
         async with unit_of_work().transaction() as transaction:
+            attempt_repository = self._attempt_repository(transaction)
+            if attempt_repository is not None:
+                return await attempt_repository.claim_attempt(
+                    attempt_id=task.attempt_id,
+                    task_id=task.task_id,
+                    execution_id=task.execution_id,
+                    node_id=task.node_id,
+                    worker_id=self._worker_id,
+                    claimed_at=claimed_at,
+                    claim_expires_at=claim_expires_at,
+                )
             return await transaction.task_processing.claim_task(
                 task_id=task.task_id,
                 execution_id=task.execution_id,
@@ -261,6 +314,14 @@ class WorkerTaskProcessor:
                 claimed_at=claimed_at,
                 claim_expires_at=claim_expires_at,
             )
+
+    @staticmethod
+    def _attempt_repository(
+        transaction: UnitOfWork,
+    ) -> TaskAttemptProcessingRepository | None:
+        if not hasattr(transaction, "attempt_processing"):
+            return None
+        return transaction.attempt_processing
 
     async def process_malformed(
         self,
@@ -273,6 +334,8 @@ class WorkerTaskProcessor:
 
         try:
             task_id = required_field(fields, "task_id", "Task message")
+            attempt_id = UUID(required_field(fields, "attempt_id", "Task message"))
+            attempt_number = int(required_field(fields, "attempt_number", "Task message"))
             execution_id = UUID(required_field(fields, "execution_id", "Task message"))
             node_id = required_field(fields, "node_id", "Task message")
         except ValueError as identity_error:
@@ -284,6 +347,8 @@ class WorkerTaskProcessor:
         event = TaskCompletionEvent(
             event_id=uuid4(),
             task_id=task_id,
+            attempt_id=attempt_id,
+            attempt_number=attempt_number,
             execution_id=execution_id,
             node_id=node_id,
             status=TaskCompletionStatus.FAILED,
@@ -347,6 +412,8 @@ class WorkerTaskProcessor:
         return TaskCompletionEvent(
             event_id=uuid4(),
             task_id=task.task_id,
+            attempt_id=task.attempt_id,
+            attempt_number=task.attempt_number,
             execution_id=task.execution_id,
             node_id=task.node_id,
             status=TaskCompletionStatus.FAILED,

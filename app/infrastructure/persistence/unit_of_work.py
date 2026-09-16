@@ -13,14 +13,20 @@ from app.db.session import AsyncSessionFactory
 from app.domain.errors.persistence import WorkflowPersistenceError
 from app.domain.repositories.node_execution_repository import NodeExecutionRepository
 from app.domain.repositories.outbox_event_repository import OutboxEventRepository
+from app.domain.repositories.task_attempt_processing_repository import (
+    TaskAttemptProcessingRepository,
+)
 from app.domain.repositories.task_processing_repository import TaskProcessingRepository
+from app.domain.repositories.task_retry_repository import TaskRetryRepository
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.repositories.workflow_execution_repository import WorkflowExecutionRepository
 from app.domain.repositories.workflow_repository import WorkflowRepository
 from app.infrastructure.persistence.repositories import (
     SqlAlchemyNodeExecutionRepository,
     SqlAlchemyOutboxEventRepository,
+    SqlAlchemyTaskAttemptProcessingRepository,
     SqlAlchemyTaskProcessingRepository,
+    SqlAlchemyTaskRetryRepository,
     SqlAlchemyWorkflowExecutionRepository,
     SqlAlchemyWorkflowRepository,
 )
@@ -45,6 +51,10 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.task_processing: TaskProcessingRepository = cast(
             TaskProcessingRepository, _UnavailableRepository()
         )
+        self.attempt_processing: TaskAttemptProcessingRepository = cast(
+            TaskAttemptProcessingRepository, _UnavailableRepository()
+        )
+        self.task_retries: TaskRetryRepository = cast(TaskRetryRepository, _UnavailableRepository())
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[SqlAlchemyUnitOfWork]:
@@ -55,6 +65,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             self.node_executions = SqlAlchemyNodeExecutionRepository(session)
             self.outbox_events = SqlAlchemyOutboxEventRepository(session)
             self.task_processing = SqlAlchemyTaskProcessingRepository(session)
+            self.attempt_processing = SqlAlchemyTaskAttemptProcessingRepository(session)
+            self.task_retries = SqlAlchemyTaskRetryRepository(session)
             try:
                 yield self
                 await session.commit()
@@ -73,6 +85,10 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
                 self.node_executions = cast(NodeExecutionRepository, _UnavailableRepository())
                 self.outbox_events = cast(OutboxEventRepository, _UnavailableRepository())
                 self.task_processing = cast(TaskProcessingRepository, _UnavailableRepository())
+                self.attempt_processing = cast(
+                    TaskAttemptProcessingRepository, _UnavailableRepository()
+                )
+                self.task_retries = cast(TaskRetryRepository, _UnavailableRepository())
 
 
 class _UnavailableRepository:

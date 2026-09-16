@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from json import dumps
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.domain.models.json import JsonValue
 from app.messaging.stream_fields import json_value_field, required_field
@@ -28,6 +28,8 @@ class TaskCompletionEvent:
     execution_id: UUID
     node_id: str
     status: TaskCompletionStatus
+    attempt_id: UUID = field(default_factory=uuid4)
+    attempt_number: int = 1
     output_data: JsonValue = None
     error_message: str | None = None
     error_type: str | None = None
@@ -38,6 +40,8 @@ class TaskCompletionEvent:
         fields = {
             "event_id": str(self.event_id),
             "task_id": self.task_id,
+            "attempt_id": str(self.attempt_id),
+            "attempt_number": str(self.attempt_number),
             "execution_id": str(self.execution_id),
             "node_id": self.node_id,
             "status": self.status.value,
@@ -61,6 +65,8 @@ class TaskCompletionEvent:
 
         event_id = UUID(required_field(fields, "event_id", "Task completion event"))
         task_id = required_field(fields, "task_id", "Task completion event")
+        attempt_id = UUID(required_field(fields, "attempt_id", "Task completion event"))
+        attempt_number = int(required_field(fields, "attempt_number", "Task completion event"))
         execution_id = UUID(required_field(fields, "execution_id", "Task completion event"))
         node_id = required_field(fields, "node_id", "Task completion event")
         status = TaskCompletionStatus(required_field(fields, "status", "Task completion event"))
@@ -70,6 +76,8 @@ class TaskCompletionEvent:
             return cls(
                 event_id=event_id,
                 task_id=task_id,
+                attempt_id=attempt_id,
+                attempt_number=attempt_number,
                 execution_id=execution_id,
                 node_id=node_id,
                 status=status,
@@ -79,6 +87,8 @@ class TaskCompletionEvent:
         return cls(
             event_id=event_id,
             task_id=task_id,
+            attempt_id=attempt_id,
+            attempt_number=attempt_number,
             execution_id=execution_id,
             node_id=node_id,
             status=status,

@@ -4,6 +4,11 @@ from app.infrastructure.persistence.models.base import Base
 from app.infrastructure.persistence.models.node_execution import NodeExecutionRecord
 from app.infrastructure.persistence.models.outbox_event import OutboxEventRecord
 from app.infrastructure.persistence.models.task_processing import TaskProcessingRecord
+from app.infrastructure.persistence.models.task_retry import (
+    LogicalTaskRecord,
+    TaskAttemptRecord,
+    TaskRetryDispatchRecord,
+)
 from app.infrastructure.persistence.models.workflow import WorkflowRecord
 from app.infrastructure.persistence.models.workflow_execution import WorkflowExecutionRecord
 
@@ -12,6 +17,9 @@ __all__ = [
     "NodeExecutionRecord",
     "OutboxEventRecord",
     "TaskProcessingRecord",
+    "LogicalTaskRecord",
+    "TaskAttemptRecord",
+    "TaskRetryDispatchRecord",
     "WorkflowExecutionRecord",
     "WorkflowRecord",
 ]

@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from math import pow
 
 from app.domain.errors.transitions import WorkflowExecutionNotFoundError
+from app.domain.repositories.task_retry_repository import (
+    RetryDecisionOutcome,
+    TaskRetryRepository,
+)
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import NodeExecutionStatus
 from app.messaging.task_completion import TaskCompletionEvent, TaskCompletionStatus
@@ -20,6 +26,7 @@ class TaskCompletionOutcome(StrEnum):
 
     PROCESSED = "processed"
     DUPLICATE = "duplicate"
+    RETRY_SCHEDULED = "retry_scheduled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,10 +38,57 @@ class TaskCompletionDecision:
     node_id: str
     outcome: TaskCompletionOutcome
     ready_node_ids: tuple[str, ...] = ()
+    retry_attempt_id: str | None = None
+    retry_attempt_number: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RetryPolicy:
+    """Retry limits and delay calculation for failed task attempts."""
+
+    max_attempts: int = 3
+    initial_delay_seconds: float = 1.0
+    backoff_multiplier: float = 2.0
+    max_delay_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_attempts < 1:
+            raise ValueError("max_attempts must be at least one.")
+        if self.initial_delay_seconds < 0:
+            raise ValueError("initial_delay_seconds must not be negative.")
+        if self.backoff_multiplier < 1:
+            raise ValueError("backoff_multiplier must be at least one.")
+        if self.max_delay_seconds is not None and self.max_delay_seconds < 0:
+            raise ValueError("max_delay_seconds must not be negative.")
+
+    @classmethod
+    def from_environment(cls) -> RetryPolicy:
+        """Build retry policy from validated process environment settings."""
+
+        max_delay = os.getenv("WORKFLOW_TASK_RETRY_MAX_DELAY_SECONDS")
+        return cls(
+            max_attempts=int(os.getenv("WORKFLOW_TASK_MAX_ATTEMPTS", "3")),
+            initial_delay_seconds=float(
+                os.getenv("WORKFLOW_TASK_RETRY_INITIAL_DELAY_SECONDS", "1")
+            ),
+            backoff_multiplier=float(os.getenv("WORKFLOW_TASK_RETRY_BACKOFF_MULTIPLIER", "2")),
+            max_delay_seconds=None if max_delay is None else float(max_delay),
+        )
+
+    def delay_for(self, attempt_number: int) -> float:
+        if attempt_number < 1:
+            raise ValueError("attempt_number must be at least one.")
+        delay = self.initial_delay_seconds * pow(self.backoff_multiplier, attempt_number - 1)
+        if self.max_delay_seconds is not None:
+            delay = min(delay, self.max_delay_seconds)
+        return delay
 
 
 class TaskCompletionService:
     """Persist worker completion events without executing worker business logic."""
+
+    def __init__(self, retry_policy: RetryPolicy | None = None) -> None:
+        self._retry_policy = retry_policy or RetryPolicy()
 
     async def process(
         self,
@@ -69,6 +123,55 @@ class TaskCompletionService:
                     f"Node execution '{event.node_id}' was not found "
                     f"for execution '{event.execution_id}'."
                 )
+
+            retry_repository = self._retry_repository(transaction)
+            if retry_repository is not None:
+                if event.status is TaskCompletionStatus.COMPLETED:
+                    recorded = await retry_repository.record_success(
+                        task_id=event.task_id,
+                        attempt_id=event.attempt_id,
+                        completion_event_id=event.event_id,
+                        completed_at=datetime.now(UTC),
+                    )
+                    if not recorded:
+                        return TaskCompletionDecision(
+                            event_id=str(event.event_id),
+                            execution_id=str(event.execution_id),
+                            node_id=event.node_id,
+                            outcome=TaskCompletionOutcome.DUPLICATE,
+                        )
+                else:
+                    error_message = event.error_message
+                    error_type = event.error_type
+                    if error_message is None or error_type is None:
+                        raise ValueError("Failed completion events require error information.")
+                    retry_decision = await retry_repository.record_failure(
+                        task_id=event.task_id,
+                        attempt_id=event.attempt_id,
+                        failure_event_id=event.event_id,
+                        error_message=error_message,
+                        error_type=error_type,
+                        failed_at=datetime.now(UTC),
+                        max_attempts=self._retry_policy.max_attempts,
+                        retry_at=datetime.now(UTC)
+                        + timedelta(seconds=self._retry_policy.delay_for(event.attempt_number)),
+                    )
+                    if retry_decision.outcome is RetryDecisionOutcome.DUPLICATE:
+                        return TaskCompletionDecision(
+                            event_id=str(event.event_id),
+                            execution_id=str(event.execution_id),
+                            node_id=event.node_id,
+                            outcome=TaskCompletionOutcome.DUPLICATE,
+                        )
+                    if retry_decision.outcome is RetryDecisionOutcome.RETRY_SCHEDULED:
+                        return TaskCompletionDecision(
+                            event_id=str(event.event_id),
+                            execution_id=str(event.execution_id),
+                            node_id=event.node_id,
+                            outcome=TaskCompletionOutcome.RETRY_SCHEDULED,
+                            retry_attempt_id=str(retry_decision.next_attempt_id),
+                            retry_attempt_number=retry_decision.next_attempt_number,
+                        )
 
             completion_output = (
                 event.output_data if event.status is TaskCompletionStatus.COMPLETED else None
@@ -133,3 +236,9 @@ class TaskCompletionService:
                 outcome=TaskCompletionOutcome.PROCESSED,
                 ready_node_ids=ready_node_ids,
             )
+
+    @staticmethod
+    def _retry_repository(transaction: UnitOfWork) -> TaskRetryRepository | None:
+        if not hasattr(transaction, "task_retries"):
+            return None
+        return transaction.task_retries

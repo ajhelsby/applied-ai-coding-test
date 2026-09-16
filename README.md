@@ -32,6 +32,17 @@
 
 ## Mock LLM service configuration
 
+### Task retry configuration
+
+The Orchestrator reads retry policy settings from environment variables:
+
+| Variable                                    | Default | Description                                            |
+| ------------------------------------------- | ------- | ------------------------------------------------------ |
+| `WORKFLOW_TASK_MAX_ATTEMPTS`                | `3`     | Maximum total attempts, including the initial attempt. |
+| `WORKFLOW_TASK_RETRY_INITIAL_DELAY_SECONDS` | `1`     | Delay before the first retry.                          |
+| `WORKFLOW_TASK_RETRY_BACKOFF_MULTIPLIER`    | `2`     | Exponential multiplier applied for each retry.         |
+| `WORKFLOW_TASK_RETRY_MAX_DELAY_SECONDS`     | unset   | Optional upper bound for calculated retry delays.      |
+
 Configure mock LLM behavior on the Worker process with environment variables:
 
 | Variable                   | Default                     | Description                                                           |
