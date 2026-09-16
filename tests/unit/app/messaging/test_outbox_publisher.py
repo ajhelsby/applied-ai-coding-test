@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.persistence.models.outbox_event import OutboxEventRecord
 from app.messaging import outbox_publisher
 from app.messaging.outbox_publisher import OutboxPublisher
+from app.messaging.redis.streams import WORKFLOW_TASKS_STREAM
 
 
 class FakeScalarResult:
@@ -125,3 +126,67 @@ def test_publisher_locks_pending_rows_before_publishing() -> None:
     assert session.statement is not None
     assert session.statement._for_update_arg is not None
     assert session.statement._for_update_arg.skip_locked is True
+
+
+def test_publisher_routes_task_payload_to_persisted_target_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = make_event()
+    event.target_stream = WORKFLOW_TASKS_STREAM
+    event.event_type = "workflow.task"
+    event.payload = {
+        "task_id": "task-1",
+        "attempt_number": 1,
+        "handler_config": {"mode": "test"},
+    }
+    session = FakeSession([event])
+    published_fields: list[tuple[str, dict[str, str]]] = []
+
+    async def fake_publish(stream: str, fields: dict[str, str]) -> str:
+        published_fields.append((stream, fields))
+        return "1-0"
+
+    monkeypatch.setattr(outbox_publisher, "publish", fake_publish)
+
+    import asyncio
+
+    assert asyncio.run(OutboxPublisher(fake_session_factory(session)).publish_pending()) == 1
+
+    stream, fields = published_fields[0]
+    assert stream == WORKFLOW_TASKS_STREAM
+    assert fields["message_id"] == str(event.event_id)
+    assert fields["message_type"] == "workflow.task"
+    assert fields["task_id"] == "task-1"
+    assert fields["attempt_number"] == "1"
+    assert loads(fields["handler_config"]) == {"mode": "test"}
+
+
+def test_publisher_reuses_message_after_redis_acceptance_ack_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = make_event()
+    session = FakeSession([event])
+    published_fields: list[dict[str, str]] = []
+    publish_attempt = 0
+
+    async def fake_publish(_stream: str, fields: dict[str, str]) -> str:
+        nonlocal publish_attempt
+        publish_attempt += 1
+        published_fields.append(fields)
+        if publish_attempt == 1:
+            raise ConnectionError("database acknowledgement interrupted")
+        return "2-0"
+
+    monkeypatch.setattr(outbox_publisher, "publish", fake_publish)
+
+    import asyncio
+
+    with pytest.raises(ConnectionError, match="acknowledgement interrupted"):
+        asyncio.run(OutboxPublisher(fake_session_factory(session)).publish_pending())
+
+    assert event.status == "pending"
+    assert event.publish_attempts == 1
+
+    assert asyncio.run(OutboxPublisher(fake_session_factory(session)).publish_pending()) == 1
+    assert published_fields[0] == published_fields[1]
+    assert event.status == "published"

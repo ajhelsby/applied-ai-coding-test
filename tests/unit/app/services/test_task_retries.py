@@ -147,12 +147,26 @@ class FakeWorkflows:
         return Workflow(workflow_id=workflow_id, name="retry-test")
 
 
+class FakeOutboxEvents:
+    async def add_message(
+        self,
+        *,
+        message_id: UUID,
+        message_type: str,
+        target_stream: str,
+        payload: dict[str, object],
+        aggregate_id: UUID | None = None,
+    ) -> None:
+        del message_id, message_type, target_stream, payload, aggregate_id
+
+
 class FakeUnitOfWork:
     def __init__(self, execution: WorkflowExecution, node_id: str) -> None:
         self.workflow_executions = FakeWorkflowExecutions(execution)
         self.workflows = FakeWorkflows()
         self.node_executions = FakeNodeExecutions(execution.execution_id, node_id)
         self.task_retries = FakeRetryRepository()
+        self.outbox_events = FakeOutboxEvents()
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[FakeUnitOfWork]:

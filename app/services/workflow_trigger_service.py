@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.domain.errors.transitions import (
     WorkflowExecutionNotFoundError,
@@ -12,6 +12,7 @@ from app.domain.errors.transitions import (
 )
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.state.states import WorkflowExecutionStatus
+from app.messaging.redis.streams import WORKFLOW_EVENTS_STREAM
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +50,13 @@ class WorkflowTriggerService:
             )
             if not transitioned:
                 raise WorkflowExecutionNotTriggerableError(str(execution_id), execution.status)
-            await transaction.outbox_events.add_execution_triggered(execution_id)
+            await transaction.outbox_events.add_message(
+                message_id=uuid4(),
+                message_type="workflow.execution.triggered",
+                target_stream=WORKFLOW_EVENTS_STREAM,
+                aggregate_id=execution_id,
+                payload={"execution_id": str(execution_id)},
+            )
 
         return WorkflowTriggerDecision(
             execution_id=execution_id,
