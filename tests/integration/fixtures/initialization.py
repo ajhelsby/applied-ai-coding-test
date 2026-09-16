@@ -6,9 +6,9 @@ import os
 from pathlib import Path
 
 import redis
-from alembic import command
 from alembic.config import Config
 
+from alembic import command
 from tests.integration.fixtures.infrastructure import InfrastructureConfig
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[3]

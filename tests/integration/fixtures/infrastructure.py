@@ -54,9 +54,7 @@ def external_infrastructure() -> InfrastructureConfig | None:
     if database_url is None and redis_url is None:
         return None
     if database_url is None or redis_url is None:
-        raise RuntimeError(
-            f"{DATABASE_URL_ENV} and {REDIS_URL_ENV} must be configured together."
-        )
+        raise RuntimeError(f"{DATABASE_URL_ENV} and {REDIS_URL_ENV} must be configured together.")
 
     return InfrastructureConfig(
         database_url=_normalize_database_url(

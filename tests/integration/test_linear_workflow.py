@@ -42,9 +42,7 @@ def test_linear_workflow_executes_asynchronously(
                         "id": "C",
                         "handler": "llm_service",
                         "dependencies": ["A", "B"],
-                        "config": {
-                            "prompt": "C received {{ B.response }} from {{ A.value }}"
-                        },
+                        "config": {"prompt": "C received {{ B.response }} from {{ A.value }}"},
                     },
                 ]
             },
@@ -60,7 +58,9 @@ def test_linear_workflow_executes_asynchronously(
     assert trigger_response.status_code == 202
     assert trigger_response.json()["execution_id"] == str(execution_id)
 
-    fetch_status = lambda: api_client.get(f"/workflows/{execution_id}").json()
+    def fetch_status() -> object:
+        return api_client.get(f"/workflows/{execution_id}").json()
+
     after_a = wait_for_node_status(fetch_status, str(execution_id), "A", "COMPLETED")
     after_b = wait_for_node_status(fetch_status, str(execution_id), "B", "COMPLETED")
 

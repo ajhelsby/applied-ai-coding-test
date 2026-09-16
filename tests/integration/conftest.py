@@ -8,15 +8,15 @@ import psycopg2
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.integration.fixtures.infrastructure import (
+    InfrastructureConfig,
+    selected_infrastructure,
+)
 from tests.integration.fixtures.initialization import (
     apply_database_migrations,
     configure_environment,
     initialize_redis_streams,
     reset_redis_streams,
-)
-from tests.integration.fixtures.infrastructure import (
-    InfrastructureConfig,
-    selected_infrastructure,
 )
 from tests.integration.fixtures.lifecycle import (
     ServiceProcess,
