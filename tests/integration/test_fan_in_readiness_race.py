@@ -76,6 +76,46 @@ async def _coordinate_race(
         await client.close()
 
 
+async def _coordinate_duplicate_race(
+    infrastructure: InfrastructureConfig,
+    parent_barrier_name: str,
+    completion_barrier_name: str,
+    downstream_barrier_name: str,
+) -> None:
+    client = aioredis.from_url(infrastructure.redis_url, decode_responses=True)
+    try:
+        parent_barrier = RedisBarrier(client, parent_barrier_name, ("B", "C"))
+        completion_barrier = RedisBarrier(client, completion_barrier_name, ("B", "C"))
+        downstream_barrier = RedisBarrier(client, downstream_barrier_name, ("D",))
+
+        await parent_barrier.wait_for_arrivals()
+        await parent_barrier.release()
+        await completion_barrier.wait_for_arrivals()
+
+        completion_entries = await client.xrange("workflow.task-completions")
+        parent_completion = next(
+            fields for _, fields in completion_entries if fields.get("node_id") == "B"
+        )
+        await client.xadd("workflow.task-completions", parent_completion)
+        await completion_barrier.release()
+        arrival_stream = _barrier_stream_names(completion_barrier_name)[0]
+        arrivals = await client.xrange(arrival_stream)
+        duplicate_arrival = await client.xread(
+            streams={arrival_stream: arrivals[-1][0]},
+            count=1,
+            block=30_000,
+        )
+        if not duplicate_arrival:
+            raise RedisBarrierTimeout(
+                f"Timed out waiting for duplicate completion on barrier "
+                f"{completion_barrier_name!r}."
+            )
+        await downstream_barrier.wait_for_arrivals()
+        await downstream_barrier.release()
+    finally:
+        await client.close()
+
+
 def _barrier_stream_names(name: str) -> tuple[str, str]:
     return (
         f"integration.barrier:{name}:arrivals",
@@ -172,7 +212,10 @@ def test_concurrent_diamond_fan_in_claims_downstream_once(
             assert trigger.status_code == 202, trigger.text
 
             fetch = _workflow_fetcher(api_client, execution_id)
-            diagnostics = lambda: _service_diagnostics(orchestrators, worker)
+
+            def diagnostics() -> str:
+                return _service_diagnostics(orchestrators, worker)
+
             running = wait_for_nodes_status(
                 fetch,
                 str(execution_id),
@@ -302,7 +345,10 @@ def test_concurrent_three_parent_fan_in_claims_downstream_once(
         assert trigger.status_code == 202, trigger.text
 
         fetch = _workflow_fetcher(api_client, execution_id)
-        diagnostics = lambda: _service_diagnostics(orchestrators, worker)
+
+        def diagnostics() -> str:
+            return _service_diagnostics(orchestrators, worker)
+
         running = wait_for_nodes_status(
             fetch,
             str(execution_id),
@@ -367,6 +413,141 @@ def test_concurrent_three_parent_fan_in_claims_downstream_once(
             ),
         )
         assert len(streams[_barrier_stream_names(parent_barrier_name)[0]]) == 3
+        completion_arrivals = _barrier_stream_names(f"{completion_prefix}:{execution_id}")[0]
+        assert len(streams[completion_arrivals]) == 3
+        assert len(streams[_barrier_stream_names(downstream_barrier_name)[0]]) == 1
+
+
+def test_duplicate_parent_completion_does_not_dispatch_downstream_again(
+    api_client: TestClient,
+    integration_infrastructure: InfrastructureConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Process a duplicate parent event during the coordinated fan-in race."""
+
+    completion_prefix = f"integration-duplicate-completion-{uuid4()}"
+    monkeypatch.setenv("INTEGRATION_COMPLETION_BARRIER_PREFIX", completion_prefix)
+    monkeypatch.setenv("INTEGRATION_COMPLETION_BARRIER_NODES", "B,C")
+    monkeypatch.setenv("INTEGRATION_BARRIER_TIMEOUT_SECONDS", "30")
+
+    with running_application_service_cluster(integration_infrastructure) as (
+        orchestrators,
+        worker,
+    ):
+        parent_barrier_name = f"duplicate-parents-{uuid4()}"
+        downstream_barrier_name = f"duplicate-downstream-{uuid4()}"
+        nodes: list[JsonObject] = [
+            {"id": "A", "handler": "input", "dependencies": []},
+            *[
+                {
+                    "id": node_id,
+                    "handler": "integration_barrier",
+                    "dependencies": ["A"],
+                    "config": {
+                        "barrier": {
+                            "name": parent_barrier_name,
+                            "participant": node_id,
+                        }
+                    },
+                }
+                for node_id in ("B", "C")
+            ],
+            {
+                "id": "D",
+                "handler": "integration_barrier",
+                "dependencies": ["B", "C"],
+                "config": {
+                    "barrier": {
+                        "name": downstream_barrier_name,
+                        "participant": "D",
+                    }
+                },
+            },
+        ]
+        response = api_client.post(
+            "/workflow",
+            json={"name": f"duplicate-completion-race-{uuid4()}", "dag": {"nodes": nodes}},
+        )
+        assert response.status_code == 201, response.text
+        execution_id = UUID(response.json()["execution_id"])
+        trigger = api_client.post(
+            f"/workflow/trigger/{execution_id}",
+            json={"input": {}},
+        )
+        assert trigger.status_code == 202, trigger.text
+
+        fetch = _workflow_fetcher(api_client, execution_id)
+
+        def diagnostics() -> str:
+            return _service_diagnostics(orchestrators, worker)
+
+        running = wait_for_nodes_status(
+            fetch,
+            str(execution_id),
+            {"B": "RUNNING", "C": "RUNNING"},
+            diagnostics=diagnostics,
+        )
+        assert node_statuses(running)["D"] == "PENDING"
+
+        try:
+            asyncio.run(
+                _coordinate_duplicate_race(
+                    integration_infrastructure,
+                    parent_barrier_name,
+                    f"{completion_prefix}:{execution_id}",
+                    downstream_barrier_name,
+                )
+            )
+        except RedisBarrierTimeout as error:
+            database = inspect_database(integration_infrastructure, execution_id)
+            streams = inspect_redis_streams(
+                integration_infrastructure,
+                (
+                    *_barrier_stream_names(parent_barrier_name),
+                    *_barrier_stream_names(f"{completion_prefix}:{execution_id}"),
+                    *_barrier_stream_names(downstream_barrier_name),
+                    "workflow.task-completions",
+                ),
+            )
+            raise AssertionError(
+                f"Duplicate completion coordination failed: {error}\n"
+                f"{format_diagnostics(database, streams)}\n{diagnostics()}"
+            ) from error
+
+        completed = wait_for_workflow_status(
+            fetch,
+            str(execution_id),
+            "COMPLETED",
+            diagnostics=diagnostics,
+        )
+        assert node_statuses(completed) == {
+            "A": "COMPLETED",
+            "B": "COMPLETED",
+            "C": "COMPLETED",
+            "D": "COMPLETED",
+        }
+
+        database = inspect_database(integration_infrastructure, execution_id)
+        d_logical_tasks = _node_rows(database.logical_tasks, "D", 1)
+        d_task_ids = {row[0] for row in d_logical_tasks}
+        d_attempts = tuple(row for row in database.task_attempts if row[1] in d_task_ids)
+        assert len(d_logical_tasks) == 1
+        assert len(d_attempts) == 1
+        assert len(_task_outbox_rows(database, "D")) == 1
+
+        streams = inspect_redis_streams(
+            integration_infrastructure,
+            (
+                *_barrier_stream_names(parent_barrier_name),
+                *_barrier_stream_names(f"{completion_prefix}:{execution_id}"),
+                *_barrier_stream_names(downstream_barrier_name),
+                "workflow.task-completions",
+            ),
+        )
+        completion_entries = streams["workflow.task-completions"]
+        b_events = [fields for _, fields in completion_entries if fields.get("node_id") == "B"]
+        assert len(b_events) == 2
+        assert b_events[0]["event_id"] == b_events[1]["event_id"]
         completion_arrivals = _barrier_stream_names(f"{completion_prefix}:{execution_id}")[0]
         assert len(streams[completion_arrivals]) == 3
         assert len(streams[_barrier_stream_names(downstream_barrier_name)[0]]) == 1

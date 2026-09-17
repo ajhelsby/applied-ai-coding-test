@@ -124,8 +124,7 @@ def inspect_redis_streams(
         snapshots: dict[str, tuple[tuple[str, dict[str, str]], ...]] = {}
         for stream in streams:
             snapshots[stream] = tuple(
-                (message_id, fields)
-                for message_id, fields in client.xrange(stream)
+                (message_id, fields) for message_id, fields in client.xrange(stream)
             )
         return snapshots
     finally:
@@ -138,10 +137,7 @@ def format_diagnostics(
 ) -> str:
     """Format persisted and transport state for assertion and timeout messages."""
 
-    stream_lines = [
-        f"{stream}={entries!r}"
-        for stream, entries in sorted(streams.items())
-    ]
+    stream_lines = [f"{stream}={entries!r}" for stream, entries in sorted(streams.items())]
     return (
         f"workflow_execution={database.workflow_execution!r}\n"
         f"node_executions={database.node_executions!r}\n"

@@ -65,5 +65,8 @@ def reset_redis_streams(infrastructure: InfrastructureConfig) -> None:
     client = redis.Redis.from_url(infrastructure.redis_url, decode_responses=True)
     try:
         client.delete(*(stream for stream, _ in _REDIS_GROUPS))
+        barrier_streams = list(client.scan_iter(match="integration.barrier:*"))
+        if barrier_streams:
+            client.delete(*barrier_streams)
     finally:
         client.close()
