@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
@@ -184,10 +184,14 @@ def running_application_worker_cluster(
 @contextmanager
 def running_application_services(
     infrastructure: InfrastructureConfig,
+    *,
+    environment_overrides: Mapping[str, str] | None = None,
 ) -> Iterator[tuple[ServiceProcess, ServiceProcess]]:
     """Run the Orchestrator and Worker until the test scope exits."""
 
     environment = _service_environment(infrastructure)
+    if environment_overrides is not None:
+        environment.update(environment_overrides)
     orchestrator: ServiceProcess | None = None
     worker: ServiceProcess | None = None
     try:
