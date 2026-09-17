@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
 
 from app.api.requests import WorkflowSubmissionRequest, WorkflowTriggerRequest
@@ -39,10 +40,41 @@ unit_of_work_dependency = Depends(get_unit_of_work)
 @router.post(
     "/workflow",
     status_code=status.HTTP_201_CREATED,
+    summary="Submit a workflow definition",
+    description=(
+        "Validate and persist a workflow definition together with a pending execution. "
+        "Submission is synchronous and does not start execution; call the trigger endpoint "
+        "to begin asynchronous processing."
+    ),
+    response_description="The accepted workflow and its pending execution identifier.",
     response_model=WorkflowSubmissionResponse,
     responses={
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ValidationErrorResponse},
-        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": PersistenceErrorResponse},
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "model": ValidationErrorResponse,
+            "description": "The workflow definition failed validation.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error_code": "workflow_validation_failed",
+                        "message": "Workflow definition failed validation.",
+                        "errors": [
+                            {
+                                "code": "unknown_dependency",
+                                "message": "Node 'fetch' references unknown dependency 'missing'.",
+                                "path": "dag.nodes[0].dependencies[0]",
+                                "node_id": "fetch",
+                                "dependency_id": "missing",
+                                "meta": {},
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": PersistenceErrorResponse,
+            "description": "The workflow could not be persisted.",
+        },
     },
 )
 async def submit_workflow(
@@ -79,11 +111,32 @@ async def submit_workflow(
 
 @router.get(
     "/workflows/{execution_id}/results",
+    summary="Retrieve workflow results",
+    description=(
+        "Retrieve persisted node outputs for a workflow execution. Results are available "
+        "only after successful completion; pending, running, and failed executions return "
+        "a status and explanatory message without final results."
+    ),
+    response_description="The workflow execution state and available persisted results.",
     response_model=WorkflowExecutionResultsResponsePayload,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Workflow execution not found."}},
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "The workflow execution was not found.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Workflow execution not found.",
+                    }
+                }
+            },
+        }
+    },
 )
 async def get_workflow_execution_results(
-    execution_id: UUID,
+    execution_id: Annotated[
+        UUID,
+        Path(description="UUID of the workflow execution whose results should be retrieved."),
+    ],
     unit_of_work: UnitOfWork = unit_of_work_dependency,
 ) -> WorkflowExecutionResultsResponsePayload:
     """Retrieve final aggregated node outputs for a workflow execution."""
@@ -124,11 +177,31 @@ async def get_workflow_execution_results(
 
 @router.get(
     "/workflows/{execution_id}",
+    summary="Retrieve workflow execution status",
+    description=(
+        "Retrieve the current persisted status of a workflow execution and each of its "
+        "nodes. This operation is read-only and never starts or advances execution."
+    ),
+    response_description="The current workflow and node execution statuses.",
     response_model=WorkflowExecutionStatusResponsePayload,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Workflow execution not found."}},
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "The workflow execution was not found.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Workflow execution not found.",
+                    }
+                }
+            },
+        }
+    },
 )
 async def get_workflow_execution(
-    execution_id: UUID,
+    execution_id: Annotated[
+        UUID,
+        Path(description="UUID of the workflow execution whose status should be retrieved."),
+    ],
     unit_of_work: UnitOfWork = unit_of_work_dependency,
 ) -> WorkflowExecutionStatusResponsePayload:
     """Retrieve the current persisted status of a workflow execution."""
@@ -164,13 +237,43 @@ async def get_workflow_execution(
 @router.post(
     "/workflow/trigger/{execution_id}",
     status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger a workflow execution",
+    description=(
+        "Accept a trigger for an existing pending workflow execution, persist its input, and "
+        "queue asynchronous processing. The 202 response acknowledges acceptance and does "
+        "not indicate that execution has completed."
+    ),
+    response_description="The synchronous acknowledgement for the accepted trigger.",
     response_model=WorkflowTriggerResponse,
     responses={
-        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": PersistenceErrorResponse},
+        status.HTTP_404_NOT_FOUND: {
+            "model": PersistenceErrorResponse,
+            "description": "The workflow execution was not found.",
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "The execution cannot be triggered or the request is invalid.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error_code": "workflow_execution_not_triggerable",
+                        "message": (
+                            "Workflow execution cannot be triggered from its current state."
+                        ),
+                    }
+                }
+            },
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": PersistenceErrorResponse,
+            "description": "The trigger could not be persisted.",
+        },
     },
 )
 async def trigger_workflow_execution(
-    execution_id: UUID,
+    execution_id: Annotated[
+        UUID,
+        Path(description="UUID of the pending workflow execution to trigger."),
+    ],
     trigger: WorkflowTriggerRequest | None = None,
     unit_of_work: UnitOfWork = unit_of_work_dependency,
 ) -> WorkflowTriggerResponse | JSONResponse:
