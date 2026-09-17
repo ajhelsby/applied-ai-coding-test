@@ -38,13 +38,10 @@ async def participate_in_barrier(
         messages = await client.xread(
             streams={release_stream: stream_id},
             count=100,
-            block=max(1, int(remaining_seconds * 1000)),
+            block=max(1, min(1000, int(remaining_seconds * 1000))),
         )
         if not messages:
-            raise RedisBarrierTimeout(
-                f"Timed out after {timeout_seconds:.1f}s waiting for release of "
-                f"{participant!r} on barrier {name!r}."
-            )
+            continue
         for _, stream_messages in messages:
             for message_id, fields in stream_messages:
                 stream_id = message_id

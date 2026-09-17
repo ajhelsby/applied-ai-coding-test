@@ -298,7 +298,10 @@ def test_concurrent_three_parent_fan_in_claims_downstream_once(
     monkeypatch.setenv("INTEGRATION_COMPLETION_BARRIER_NODES", "A,B,C")
     monkeypatch.setenv("INTEGRATION_BARRIER_TIMEOUT_SECONDS", "30")
 
-    with running_application_service_cluster(integration_infrastructure) as (
+    with running_application_service_cluster(
+        integration_infrastructure,
+        orchestrator_count=3,
+    ) as (
         orchestrators,
         worker,
     ):
