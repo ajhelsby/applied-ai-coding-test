@@ -99,6 +99,50 @@ def _start_service(
     return service
 
 
+def _orchestrator_environment(
+    environment: dict[str, str],
+    index: int,
+) -> dict[str, str]:
+    orchestrator_environment = environment.copy()
+    suffix = uuid.uuid4().hex
+    orchestrator_environment["ORCHESTRATOR_CONSUMER_NAME"] = (
+        f"integration-orchestrator-{index}-{suffix}"
+    )
+    return orchestrator_environment
+
+
+@contextmanager
+def running_application_service_cluster(
+    infrastructure: InfrastructureConfig,
+    *,
+    orchestrator_count: int = 2,
+) -> Iterator[tuple[tuple[ServiceProcess, ...], ServiceProcess]]:
+    """Run one worker and multiple independent Orchestrator processes."""
+
+    if orchestrator_count < 1:
+        raise ValueError("orchestrator_count must be at least one.")
+
+    environment = _service_environment(infrastructure)
+    orchestrators: list[ServiceProcess] = []
+    worker: ServiceProcess | None = None
+    try:
+        for index in range(orchestrator_count):
+            orchestrators.append(
+                _start_service(
+                    f"orchestrator-{index + 1}",
+                    "app.orchestrator.main",
+                    _orchestrator_environment(environment, index + 1),
+                )
+            )
+        worker = _start_service("worker", "app.worker.main", environment)
+        yield tuple(orchestrators), worker
+    finally:
+        if worker is not None:
+            worker.stop()
+        for orchestrator in reversed(orchestrators):
+            orchestrator.stop()
+
+
 @contextmanager
 def running_application_services(
     infrastructure: InfrastructureConfig,

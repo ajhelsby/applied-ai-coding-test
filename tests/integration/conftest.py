@@ -22,6 +22,7 @@ from tests.integration.fixtures.initialization import (
 )
 from tests.integration.fixtures.lifecycle import (
     ServiceProcess,
+    running_application_service_cluster,
     running_application_services,
 )
 
@@ -103,4 +104,16 @@ def application_services(
 
     del clean_test_data
     with running_application_services(integration_infrastructure) as services:
+        yield services
+
+
+@pytest.fixture
+def application_service_cluster(
+    integration_infrastructure: InfrastructureConfig,
+    clean_test_data: None,
+) -> Iterator[tuple[tuple[ServiceProcess, ...], ServiceProcess]]:
+    """Run one Worker and multiple independent Orchestrator processes."""
+
+    del clean_test_data
+    with running_application_service_cluster(integration_infrastructure) as services:
         yield services
