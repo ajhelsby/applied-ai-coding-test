@@ -56,6 +56,8 @@ class FakeNodeExecutions:
             for node_id in candidate_ids
             if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
+        for node_id in claimed_ids:
+            self.statuses[node_id] = NodeExecutionStatus.RUNNING
         return claimed_ids
 
 
@@ -147,7 +149,7 @@ def test_evaluate_does_not_reidentify_started_or_processed_nodes() -> None:
     decision = asyncio.run(WorkflowReadinessService().evaluate(execution.execution_id, uow))
 
     assert decision.ready_node_ids == ("d",)
-    assert uow.node_executions.claim_calls == [(execution.execution_id, ("d",))]
+    assert uow.node_executions.claim_calls == []
 
 
 def test_evaluate_is_repeatable_and_safe_to_call_multiple_times() -> None:

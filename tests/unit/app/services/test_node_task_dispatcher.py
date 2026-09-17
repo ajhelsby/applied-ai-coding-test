@@ -66,6 +66,8 @@ class FakeNodeExecutions:
             for node_id in node_ids
             if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
+        for node_id in claimed_ids:
+            self.statuses[node_id] = NodeExecutionStatus.RUNNING
         return claimed_ids
 
     async def fail_pending_nodes(
@@ -436,6 +438,4 @@ def test_dispatch_records_task_when_redis_is_unavailable() -> None:
 
     assert result.outcome is DispatchOutcome.DISPATCHED
     assert node_executions.statuses[node.id] is NodeExecutionStatus.RUNNING
-    assert node_executions.update_calls == [
-        (node.id, NodeExecutionStatus.PENDING, NodeExecutionStatus.RUNNING),
-    ]
+    assert node_executions.update_calls == []

@@ -68,16 +68,7 @@ class WorkflowReadinessService:
         node_statuses_by_id = {item.node_id: item.status for item in node_executions}
 
         evaluated_ready_node_ids = evaluate_ready_node_ids(workflow, node_statuses_by_id)
-        claimed_ready_node_ids = await transaction.node_executions.claim_pending_nodes(
-            execution_id,
-            evaluated_ready_node_ids,
-        )
-        claimed_ready_node_id_set = frozenset(claimed_ready_node_ids)
-        promoted_ready_node_ids = tuple(
-            node_id for node_id in evaluated_ready_node_ids if node_id in claimed_ready_node_id_set
-        )
-
         return WorkflowReadinessDecision(
             execution_id=execution_id,
-            ready_node_ids=promoted_ready_node_ids,
+            ready_node_ids=evaluated_ready_node_ids,
         )

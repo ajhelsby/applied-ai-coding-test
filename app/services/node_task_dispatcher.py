@@ -138,12 +138,11 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                 execution.input_data,
                 completed_dependency_outputs,
             )
-            claimed = await transaction.node_executions.update_status_if_current(
-                execution_id=execution.execution_id,
-                node_id=node.id,
-                expected_current_status=NodeExecutionStatus.PENDING,
-                new_status=NodeExecutionStatus.RUNNING,
-                started_at=datetime.now(UTC),
+            claimed = bool(
+                await transaction.node_executions.claim_pending_nodes(
+                    execution.execution_id,
+                    (node.id,),
+                )
             )
             attempt_id = uuid4()
             retry_repository = self._retry_repository(transaction)

@@ -125,7 +125,7 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
         execution_id: UUID,
         node_ids: Sequence[str],
     ) -> tuple[str, ...]:
-        """Return eligible pending node IDs without introducing a separate ready state."""
+        """Atomically promote pending nodes to running and return claimed node IDs."""
 
         if not node_ids:
             return ()
@@ -135,7 +135,11 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
             .where(NodeExecutionRecord.workflow_execution_id == execution_id)
             .where(NodeExecutionRecord.node_id.in_(node_ids))
             .where(NodeExecutionRecord.status == NodeExecutionStatus.PENDING.value)
-            .values(updated_at=func.now())
+            .values(
+                status=NodeExecutionStatus.RUNNING.value,
+                started_at=func.now(),
+                updated_at=func.now(),
+            )
             .returning(NodeExecutionRecord.node_id)
         )
         return tuple(result.scalars().all())

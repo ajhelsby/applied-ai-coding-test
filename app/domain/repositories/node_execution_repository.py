@@ -50,7 +50,7 @@ class NodeExecutionRepository(Protocol):
         execution_id: UUID,
         node_ids: Sequence[str],
     ) -> tuple[str, ...]:
-        """Atomically promote pending nodes to ready and return claimed node IDs."""
+        """Atomically promote pending nodes to running and return claimed node IDs."""
 
     async def fail_pending_nodes(
         self,

@@ -73,6 +73,8 @@ class FakeNodeExecutions:
             for node_id in node_ids
             if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
+        for node_id in claimed_ids:
+            self.statuses[node_id] = NodeExecutionStatus.RUNNING
         return claimed_ids
 
     async def fail_pending_nodes(
