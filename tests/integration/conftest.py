@@ -24,6 +24,7 @@ from tests.integration.fixtures.lifecycle import (
     ServiceProcess,
     running_application_service_cluster,
     running_application_services,
+    running_application_worker_cluster,
 )
 
 
@@ -117,3 +118,15 @@ def application_service_cluster(
     del clean_test_data
     with running_application_service_cluster(integration_infrastructure) as services:
         yield services
+
+
+@pytest.fixture
+def application_worker_cluster(
+    integration_infrastructure: InfrastructureConfig,
+    clean_test_data: None,
+) -> Iterator[tuple[ServiceProcess, ...]]:
+    """Run multiple independent Workers for one integration test."""
+
+    del clean_test_data
+    with running_application_worker_cluster(integration_infrastructure) as workers:
+        yield workers
