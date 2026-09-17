@@ -21,6 +21,9 @@ class IntegrationBarrierNodeHandler(NodeHandler):
             )
 
         barrier = _barrier_config(task.handler_config)
+        counter_key = _execution_counter_key(task.handler_config)
+        if counter_key is not None:
+            await get_async_redis_client().incr(counter_key)
         await participate_in_barrier(
             get_async_redis_client(),
             barrier["name"],
@@ -45,6 +48,17 @@ def _barrier_config(config: Mapping[str, object]) -> dict[str, str]:
     if not isinstance(participant, str) or not participant.strip():
         raise ValueError("Handler 'integration_barrier' requires a non-empty barrier.participant.")
     return {"name": name, "participant": participant}
+
+
+def _execution_counter_key(config: Mapping[str, object]) -> str | None:
+    value = config.get("execution_counter")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            "Handler 'integration_barrier' requires execution_counter to be a non-empty string."
+        )
+    return f"integration.handler-executions:{value}"
 
 
 def _timeout_seconds() -> float:
