@@ -109,11 +109,10 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                 dependency_statuses.get(dependency_id)
                 in {
                     NodeExecutionStatus.FAILED,
-                    NodeExecutionStatus.SKIPPED,
                 }
                 for dependency_id in node.dependencies
             ):
-                await transaction.node_executions.skip_pending_or_ready_nodes(
+                await transaction.node_executions.fail_pending_nodes(
                     execution.execution_id,
                     (node.id,),
                     reason="A required dependency failed.",
@@ -124,7 +123,7 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                     node_id=node.id,
                     task_id=task_id,
                     outcome=DispatchOutcome.ALREADY_STARTED,
-                    reason="A required dependency failed; node was skipped.",
+                    reason="A required dependency failed; node was marked failed.",
                 )
 
             completed_dependency_outputs = {
@@ -139,12 +138,11 @@ class RedisNodeTaskDispatcher(NodeTaskDispatcher):
                 execution.input_data,
                 completed_dependency_outputs,
             )
-            claimed = await transaction.node_executions.update_status_if_current(
-                execution_id=execution.execution_id,
-                node_id=node.id,
-                expected_current_status=NodeExecutionStatus.READY,
-                new_status=NodeExecutionStatus.RUNNING,
-                started_at=datetime.now(UTC),
+            claimed = bool(
+                await transaction.node_executions.claim_pending_nodes(
+                    execution.execution_id,
+                    (node.id,),
+                )
             )
             attempt_id = uuid4()
             retry_repository = self._retry_repository(transaction)

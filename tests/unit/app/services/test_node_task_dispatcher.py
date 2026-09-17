@@ -67,10 +67,10 @@ class FakeNodeExecutions:
             if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
         for node_id in claimed_ids:
-            self.statuses[node_id] = NodeExecutionStatus.READY
+            self.statuses[node_id] = NodeExecutionStatus.RUNNING
         return claimed_ids
 
-    async def skip_pending_or_ready_nodes(
+    async def fail_pending_nodes(
         self,
         _execution_id: UUID,
         node_ids: Sequence[str],
@@ -82,11 +82,10 @@ class FakeNodeExecutions:
         skipped_ids = tuple(
             node_id
             for node_id in node_ids
-            if self.statuses.get(node_id)
-            in {NodeExecutionStatus.PENDING, NodeExecutionStatus.READY}
+            if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
         for node_id in skipped_ids:
-            self.statuses[node_id] = NodeExecutionStatus.SKIPPED
+            self.statuses[node_id] = NodeExecutionStatus.FAILED
         return skipped_ids
 
 
@@ -140,7 +139,7 @@ def make_node(node_id: str = "node-1") -> WorkflowNode:
 def test_dispatch_publishes_task_after_claiming_node() -> None:
     execution = make_execution()
     node = make_node()
-    node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.READY})
+    node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.PENDING})
     unit_of_work = FakeUnitOfWork(node_executions)
 
     result = asyncio.run(
@@ -169,14 +168,14 @@ def test_dispatch_publishes_task_after_claiming_node() -> None:
     assert node_executions.statuses[node.id] is NodeExecutionStatus.RUNNING
 
 
-def test_dispatch_skips_ready_node_when_dependency_failed() -> None:
+def test_dispatch_fails_pending_node_when_dependency_failed() -> None:
     execution = make_execution()
     node = make_node("downstream")
     node = node.model_copy(update={"dependencies": ["failed"]})
     node_executions = FakeNodeExecutions(
         {
             "failed": NodeExecutionStatus.FAILED,
-            node.id: NodeExecutionStatus.READY,
+            node.id: NodeExecutionStatus.PENDING,
         }
     )
     published: list[dict[str, str]] = []
@@ -194,8 +193,8 @@ def test_dispatch_skips_ready_node_when_dependency_failed() -> None:
     )
 
     assert result.outcome is DispatchOutcome.ALREADY_STARTED
-    assert result.reason == "A required dependency failed; node was skipped."
-    assert node_executions.statuses[node.id] is NodeExecutionStatus.SKIPPED
+    assert result.reason == "A required dependency failed; node was marked failed."
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.FAILED
     assert published == []
 
 
@@ -203,7 +202,7 @@ def test_dispatch_many_dispatches_independent_nodes_concurrently() -> None:
     execution = make_execution()
     first_node, second_node = make_node("first"), make_node("second")
     node_executions = FakeNodeExecutions(
-        {first_node.id: NodeExecutionStatus.READY, second_node.id: NodeExecutionStatus.READY}
+        {first_node.id: NodeExecutionStatus.PENDING, second_node.id: NodeExecutionStatus.PENDING}
     )
     results = asyncio.run(
         RedisNodeTaskDispatcher().dispatch_many(
@@ -233,7 +232,7 @@ def test_dispatch_resolves_templates_from_completed_dependency_outputs() -> None
     node_executions = FakeNodeExecutions(
         {
             "get_posts": NodeExecutionStatus.COMPLETED,
-            node.id: NodeExecutionStatus.READY,
+            node.id: NodeExecutionStatus.PENDING,
         },
         outputs={"get_posts": {"count": 2}},
     )
@@ -255,7 +254,7 @@ def test_dispatch_resolves_templates_from_completed_dependency_outputs() -> None
 
 @pytest.mark.parametrize(
     "dependency_status",
-    [NodeExecutionStatus.READY, NodeExecutionStatus.FAILED],
+    [NodeExecutionStatus.PENDING, NodeExecutionStatus.FAILED],
 )
 def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
     dependency_status: NodeExecutionStatus,
@@ -270,7 +269,7 @@ def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
     node_executions = FakeNodeExecutions(
         {
             "get_user": dependency_status,
-            node.id: NodeExecutionStatus.READY,
+            node.id: NodeExecutionStatus.PENDING,
         },
         outputs={"get_user": {"id": 123}},
     )
@@ -289,8 +288,8 @@ def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
             )
         )
         assert result.outcome is DispatchOutcome.ALREADY_STARTED
-        assert result.reason == "A required dependency failed; node was skipped."
-        assert node_executions.statuses[node.id] is NodeExecutionStatus.SKIPPED
+        assert result.reason == "A required dependency failed; node was marked failed."
+        assert node_executions.statuses[node.id] is NodeExecutionStatus.FAILED
     else:
         with pytest.raises(TemplateResolutionError, match="unavailable dependency output"):
             asyncio.run(
@@ -300,7 +299,7 @@ def test_dispatch_does_not_resolve_incomplete_dependency_outputs(
                     FakeUnitOfWork(node_executions),
                 )
             )
-        assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
+        assert node_executions.statuses[node.id] is NodeExecutionStatus.PENDING
 
     assert published == []
     assert node_executions.update_calls == []
@@ -317,7 +316,7 @@ def test_dispatch_does_not_resolve_outputs_from_another_execution() -> None:
     node_executions = FakeNodeExecutions(
         {
             "get_user": NodeExecutionStatus.COMPLETED,
-            node.id: NodeExecutionStatus.READY,
+            node.id: NodeExecutionStatus.PENDING,
         },
         outputs={"get_user": {"id": 123}},
         execution_ids={"get_user": uuid4()},
@@ -338,7 +337,7 @@ def test_dispatch_does_not_resolve_outputs_from_another_execution() -> None:
         )
 
     assert published == []
-    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.PENDING
 
 
 def test_dispatch_does_not_publish_when_output_path_is_missing() -> None:
@@ -352,7 +351,7 @@ def test_dispatch_does_not_publish_when_output_path_is_missing() -> None:
     node_executions = FakeNodeExecutions(
         {
             "get_user": NodeExecutionStatus.COMPLETED,
-            node.id: NodeExecutionStatus.READY,
+            node.id: NodeExecutionStatus.PENDING,
         },
         outputs={"get_user": {"profile": {}}},
     )
@@ -372,7 +371,7 @@ def test_dispatch_does_not_publish_when_output_path_is_missing() -> None:
         )
 
     assert published == []
-    assert node_executions.statuses[node.id] is NodeExecutionStatus.READY
+    assert node_executions.statuses[node.id] is NodeExecutionStatus.PENDING
 
 
 def test_dispatch_aggregates_completed_fan_in_dependencies_for_output_node() -> None:
@@ -386,7 +385,7 @@ def test_dispatch_aggregates_completed_fan_in_dependencies_for_output_node() -> 
         {
             "get_posts": NodeExecutionStatus.COMPLETED,
             "get_comments": NodeExecutionStatus.COMPLETED,
-            node.id: NodeExecutionStatus.READY,
+            node.id: NodeExecutionStatus.PENDING,
         },
         outputs={
             "get_posts": {"posts": [{"id": 1}]},
@@ -412,7 +411,7 @@ def test_dispatch_aggregates_completed_fan_in_dependencies_for_output_node() -> 
 def test_duplicate_dispatch_does_not_publish_another_task() -> None:
     execution = make_execution()
     node = make_node()
-    node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.READY})
+    node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.PENDING})
     unit_of_work = FakeUnitOfWork(node_executions)
     dispatcher = RedisNodeTaskDispatcher()
     first_result = asyncio.run(dispatcher.dispatch(execution, node, unit_of_work))
@@ -427,7 +426,7 @@ def test_duplicate_dispatch_does_not_publish_another_task() -> None:
 def test_dispatch_records_task_when_redis_is_unavailable() -> None:
     execution = make_execution()
     node = make_node()
-    node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.READY})
+    node_executions = FakeNodeExecutions({node.id: NodeExecutionStatus.PENDING})
 
     result = asyncio.run(
         RedisNodeTaskDispatcher().dispatch(
@@ -439,6 +438,4 @@ def test_dispatch_records_task_when_redis_is_unavailable() -> None:
 
     assert result.outcome is DispatchOutcome.DISPATCHED
     assert node_executions.statuses[node.id] is NodeExecutionStatus.RUNNING
-    assert node_executions.update_calls == [
-        (node.id, NodeExecutionStatus.READY, NodeExecutionStatus.RUNNING),
-    ]
+    assert node_executions.update_calls == []

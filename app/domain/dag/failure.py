@@ -12,13 +12,11 @@ from app.domain.state.states import NodeExecutionStatus
 _SKIPPABLE_STATUSES = frozenset(
     {
         NodeExecutionStatus.PENDING,
-        NodeExecutionStatus.READY,
     }
 )
 _BLOCKING_STATUSES = frozenset(
     {
         NodeExecutionStatus.FAILED,
-        NodeExecutionStatus.SKIPPED,
     }
 )
 
@@ -27,7 +25,7 @@ def evaluate_failed_dependency_node_ids(
     workflow: Workflow,
     node_statuses_by_id: Mapping[str, NodeExecutionStatus],
 ) -> tuple[str, ...]:
-    """Return pending or ready nodes made impossible by failed dependencies."""
+    """Return pending nodes made impossible by failed dependencies."""
 
     dag = DAG.from_workflow(workflow)
     statuses = dict(node_statuses_by_id)
@@ -48,7 +46,7 @@ def evaluate_failed_dependency_node_ids(
                 continue
 
             blocked_node_ids.add(dependant.node_id)
-            statuses[dependant.node_id] = NodeExecutionStatus.SKIPPED
+            statuses[dependant.node_id] = NodeExecutionStatus.FAILED
             queue.append(dependant.node_id)
 
     return tuple(node.id for node in workflow.dag.nodes if node.id in blocked_node_ids)

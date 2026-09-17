@@ -74,10 +74,10 @@ class FakeNodeExecutions:
             if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
         for node_id in claimed_ids:
-            self.statuses[node_id] = NodeExecutionStatus.READY
+            self.statuses[node_id] = NodeExecutionStatus.RUNNING
         return claimed_ids
 
-    async def skip_pending_or_ready_nodes(
+    async def fail_pending_nodes(
         self,
         _execution_id: UUID,
         node_ids: Sequence[str],
@@ -89,11 +89,10 @@ class FakeNodeExecutions:
         skipped_ids = tuple(
             node_id
             for node_id in node_ids
-            if self.statuses.get(node_id)
-            in {NodeExecutionStatus.PENDING, NodeExecutionStatus.READY}
+            if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
         for node_id in skipped_ids:
-            self.statuses[node_id] = NodeExecutionStatus.SKIPPED
+            self.statuses[node_id] = NodeExecutionStatus.FAILED
             self.errors[node_id] = (reason, "FailedDependency")
         return skipped_ids
 
@@ -219,8 +218,8 @@ def test_successful_completion_persists_output_and_promotes_fan_out() -> None:
     assert decision.ready_node_ids == ("left", "right")
     assert uow.node_executions.statuses["root"] is NodeExecutionStatus.COMPLETED
     assert uow.node_executions.outputs["root"] == {"result": "ok"}
-    assert uow.node_executions.statuses["left"] is NodeExecutionStatus.READY
-    assert uow.node_executions.statuses["right"] is NodeExecutionStatus.READY
+    assert uow.node_executions.statuses["left"] is NodeExecutionStatus.PENDING
+    assert uow.node_executions.statuses["right"] is NodeExecutionStatus.PENDING
 
 
 def test_successful_completion_persists_null_output() -> None:
@@ -322,7 +321,7 @@ def test_successful_completion_promotes_fan_in_after_all_parents_finish() -> Non
     )
 
     assert decision.ready_node_ids == ("join",)
-    assert uow.node_executions.statuses["join"] is NodeExecutionStatus.READY
+    assert uow.node_executions.statuses["join"] is NodeExecutionStatus.PENDING
 
 
 def test_concurrent_parent_completions_promote_fan_in_only_once() -> None:
@@ -359,7 +358,7 @@ def test_concurrent_parent_completions_promote_fan_in_only_once() -> None:
     decisions = asyncio.run(complete_both_parents())
 
     assert sorted(decision.ready_node_ids for decision in decisions) == [(), ("join",)]
-    assert uow.node_executions.statuses["join"] is NodeExecutionStatus.READY
+    assert uow.node_executions.statuses["join"] is NodeExecutionStatus.PENDING
 
 
 def test_failed_completion_persists_error_and_fails_workflow() -> None:
@@ -388,7 +387,7 @@ def test_failed_completion_persists_error_and_fails_workflow() -> None:
     assert uow.node_executions.statuses["root"] is NodeExecutionStatus.FAILED
     assert uow.node_executions.outputs["root"] is None
     assert uow.node_executions.errors["root"] == ("handler failed", "RuntimeError")
-    assert uow.node_executions.statuses["child"] is NodeExecutionStatus.SKIPPED
+    assert uow.node_executions.statuses["child"] is NodeExecutionStatus.FAILED
     assert uow.node_executions.errors["child"] == (
         "Dependency 'root' failed.",
         "FailedDependency",
@@ -414,7 +413,7 @@ def test_failed_completion_skips_multi_level_dependants_and_preserves_independen
         {
             "root": NodeExecutionStatus.RUNNING,
             "left": NodeExecutionStatus.PENDING,
-            "right": NodeExecutionStatus.READY,
+            "right": NodeExecutionStatus.PENDING,
             "join": NodeExecutionStatus.PENDING,
             "independent": NodeExecutionStatus.PENDING,
         },
@@ -428,9 +427,9 @@ def test_failed_completion_skips_multi_level_dependants_and_preserves_independen
 
     assert uow.node_executions.statuses == {
         "root": NodeExecutionStatus.FAILED,
-        "left": NodeExecutionStatus.SKIPPED,
-        "right": NodeExecutionStatus.SKIPPED,
-        "join": NodeExecutionStatus.SKIPPED,
+        "left": NodeExecutionStatus.FAILED,
+        "right": NodeExecutionStatus.FAILED,
+        "join": NodeExecutionStatus.FAILED,
         "independent": NodeExecutionStatus.PENDING,
     }
     assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.FAILED
@@ -450,7 +449,7 @@ def test_duplicate_failed_completion_does_not_repeat_skip_transitions() -> None:
         workflow,
         {
             "root": NodeExecutionStatus.FAILED,
-            "child": NodeExecutionStatus.SKIPPED,
+            "child": NodeExecutionStatus.FAILED,
         },
     )
     uow.node_executions.errors["root"] = ("original failure", "RuntimeError")
@@ -507,7 +506,7 @@ def test_concurrent_failed_completions_propagate_once() -> None:
     ]
     assert uow.node_executions.statuses == {
         "root": NodeExecutionStatus.FAILED,
-        "child": NodeExecutionStatus.SKIPPED,
+        "child": NodeExecutionStatus.FAILED,
     }
     assert uow.workflow_executions.execution.status is WorkflowExecutionStatus.FAILED
 

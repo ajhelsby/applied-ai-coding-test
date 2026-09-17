@@ -57,7 +57,7 @@ class FakeNodeExecutions:
             if self.statuses.get(node_id) is NodeExecutionStatus.PENDING
         )
         for node_id in claimed_ids:
-            self.statuses[node_id] = NodeExecutionStatus.READY
+            self.statuses[node_id] = NodeExecutionStatus.RUNNING
         return claimed_ids
 
 
@@ -128,8 +128,8 @@ def test_evaluate_promotes_all_currently_ready_nodes() -> None:
 
     assert decision.execution_id == execution.execution_id
     assert decision.ready_node_ids == ("b", "c")
-    assert uow.node_executions.statuses["b"] is NodeExecutionStatus.READY
-    assert uow.node_executions.statuses["c"] is NodeExecutionStatus.READY
+    assert uow.node_executions.statuses["b"] is NodeExecutionStatus.PENDING
+    assert uow.node_executions.statuses["c"] is NodeExecutionStatus.PENDING
     assert uow.node_executions.statuses["d"] is NodeExecutionStatus.PENDING
 
 
@@ -149,7 +149,7 @@ def test_evaluate_does_not_reidentify_started_or_processed_nodes() -> None:
     decision = asyncio.run(WorkflowReadinessService().evaluate(execution.execution_id, uow))
 
     assert decision.ready_node_ids == ("d",)
-    assert uow.node_executions.claim_calls == [(execution.execution_id, ("d",))]
+    assert uow.node_executions.claim_calls == []
 
 
 def test_evaluate_is_repeatable_and_safe_to_call_multiple_times() -> None:
@@ -169,7 +169,7 @@ def test_evaluate_is_repeatable_and_safe_to_call_multiple_times() -> None:
     second = asyncio.run(WorkflowReadinessService().evaluate(execution.execution_id, uow))
 
     assert first.ready_node_ids == ("b", "c")
-    assert second.ready_node_ids == ()
+    assert second.ready_node_ids == ("b", "c")
 
 
 def test_evaluate_raises_when_execution_missing() -> None:

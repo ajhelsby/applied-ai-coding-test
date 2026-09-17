@@ -22,21 +22,15 @@ WORKFLOW_TRANSITIONS: dict[WorkflowExecutionStatus, set[WorkflowExecutionStatus]
 
 NODE_TRANSITIONS: dict[NodeExecutionStatus, set[NodeExecutionStatus]] = {
     NodeExecutionStatus.PENDING: {
-        NodeExecutionStatus.READY,
-        NodeExecutionStatus.SKIPPED,
-    },
-    NodeExecutionStatus.READY: {
         NodeExecutionStatus.RUNNING,
-        NodeExecutionStatus.SKIPPED,
+        NodeExecutionStatus.FAILED,
     },
     NodeExecutionStatus.RUNNING: {
-        NodeExecutionStatus.READY,
         NodeExecutionStatus.COMPLETED,
         NodeExecutionStatus.FAILED,
     },
     NodeExecutionStatus.COMPLETED: set(),
     NodeExecutionStatus.FAILED: set(),
-    NodeExecutionStatus.SKIPPED: set(),
 }
 
 

@@ -284,7 +284,7 @@ def test_concurrent_pending_node_claims_promote_node_only_once(
             persisted_nodes = await transaction.node_executions.get_node_executions_for_execution(
                 execution.execution_id
             )
-            assert persisted_nodes[0].status is NodeExecutionStatus.READY
+            assert persisted_nodes[0].status is NodeExecutionStatus.RUNNING
 
     asyncio.run(scenario())
 

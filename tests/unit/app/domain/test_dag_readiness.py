@@ -97,11 +97,11 @@ def test_already_processed_or_running_nodes_are_not_returned() -> None:
     ready = evaluate_ready_node_ids(
         workflow,
         {
-            "a": NodeExecutionStatus.READY,
+            "a": NodeExecutionStatus.RUNNING,
             "b": NodeExecutionStatus.RUNNING,
             "c": NodeExecutionStatus.COMPLETED,
             "d": NodeExecutionStatus.FAILED,
-            "e": NodeExecutionStatus.SKIPPED,
+            "e": NodeExecutionStatus.FAILED,
         },
     )
 
@@ -194,7 +194,7 @@ def test_existing_skipped_dependency_continues_propagation() -> None:
 
     skipped = evaluate_failed_dependency_node_ids(
         workflow,
-        {"a": NodeExecutionStatus.FAILED, "b": NodeExecutionStatus.SKIPPED},
+        {"a": NodeExecutionStatus.FAILED, "b": NodeExecutionStatus.FAILED},
     )
 
     assert skipped == ("c",)
