@@ -114,7 +114,7 @@ class FakeNodeExecutions:
         del execution_id, node_ids
         return ()
 
-    async def skip_pending_or_ready_nodes(
+    async def fail_pending_nodes(
         self,
         execution_id: UUID,
         node_ids: Sequence[str],

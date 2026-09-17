@@ -50,11 +50,8 @@ def test_workflow_invalid_transitions(
 @pytest.mark.parametrize(
     ("current_status", "target_status"),
     [
-        (NodeExecutionStatus.PENDING, NodeExecutionStatus.READY),
-        (NodeExecutionStatus.PENDING, NodeExecutionStatus.SKIPPED),
-        (NodeExecutionStatus.READY, NodeExecutionStatus.RUNNING),
-        (NodeExecutionStatus.READY, NodeExecutionStatus.SKIPPED),
-        (NodeExecutionStatus.RUNNING, NodeExecutionStatus.READY),
+        (NodeExecutionStatus.PENDING, NodeExecutionStatus.RUNNING),
+        (NodeExecutionStatus.PENDING, NodeExecutionStatus.FAILED),
         (NodeExecutionStatus.RUNNING, NodeExecutionStatus.COMPLETED),
         (NodeExecutionStatus.RUNNING, NodeExecutionStatus.FAILED),
     ],
@@ -76,11 +73,10 @@ def test_node_valid_transitions(
 @pytest.mark.parametrize(
     ("current_status", "target_status"),
     [
-        (NodeExecutionStatus.PENDING, NodeExecutionStatus.RUNNING),
-        (NodeExecutionStatus.READY, NodeExecutionStatus.COMPLETED),
+        (NodeExecutionStatus.PENDING, NodeExecutionStatus.COMPLETED),
         (NodeExecutionStatus.COMPLETED, NodeExecutionStatus.RUNNING),
-        (NodeExecutionStatus.FAILED, NodeExecutionStatus.READY),
-        (NodeExecutionStatus.SKIPPED, NodeExecutionStatus.READY),
+        (NodeExecutionStatus.FAILED, NodeExecutionStatus.RUNNING),
+        (NodeExecutionStatus.RUNNING, NodeExecutionStatus.PENDING),
     ],
 )
 def test_node_invalid_transitions(
@@ -104,4 +100,3 @@ def test_workflow_terminal_states_have_no_outgoing_transitions() -> None:
 def test_node_terminal_states_have_no_outgoing_transitions() -> None:
     assert NODE_TRANSITIONS[NodeExecutionStatus.COMPLETED] == set()
     assert NODE_TRANSITIONS[NodeExecutionStatus.FAILED] == set()
-    assert NODE_TRANSITIONS[NodeExecutionStatus.SKIPPED] == set()

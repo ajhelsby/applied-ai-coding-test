@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,6 +18,12 @@ class NodeExecutionRecord(Base):
     """Database record for a node execution."""
 
     __tablename__ = "node_executions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed')",
+            name="ck_node_executions_status",
+        ),
+    )
 
     workflow_execution_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),

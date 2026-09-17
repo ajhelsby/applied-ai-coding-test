@@ -9,11 +9,9 @@ from app.domain.state.states import NodeExecutionStatus
 
 _NON_READY_STATUSES = frozenset(
     {
-        NodeExecutionStatus.READY,
         NodeExecutionStatus.RUNNING,
         NodeExecutionStatus.COMPLETED,
         NodeExecutionStatus.FAILED,
-        NodeExecutionStatus.SKIPPED,
     }
 )
 

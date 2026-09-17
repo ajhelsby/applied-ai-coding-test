@@ -39,7 +39,8 @@ class MockExternalServiceNodeHandler(NodeHandler):
         url = task.handler_config.get("url")
         if not isinstance(url, str) or not url.strip():
             raise ValueError("Handler 'call_external_service' requires a non-empty config.url.")
-        await asyncio.sleep(self._settings.latency_ms / 1000)
+        latency_ms = self._latency_ms(task.handler_config)
+        await asyncio.sleep(latency_ms / 1000)
         generator = random.Random(self._random_seed(self._settings.seed, url))
         if self._settings.force_fail or generator.random() < self._settings.failure_rate:
             raise ValueError(self._settings.failure_message)
@@ -48,6 +49,20 @@ class MockExternalServiceNodeHandler(NodeHandler):
             "url": url,
             "input": dict(task.resolved_input),
         }
+
+    def _latency_ms(self, config: dict[str, object]) -> int:
+        configured_latency = config.get("latency_ms")
+        if configured_latency is None:
+            return self._settings.latency_ms
+        if isinstance(configured_latency, bool) or not isinstance(configured_latency, int):
+            raise ValueError(
+                "Handler 'call_external_service' config.latency_ms must be an integer."
+            )
+        if configured_latency < 0:
+            raise ValueError(
+                "Handler 'call_external_service' config.latency_ms must be non-negative."
+            )
+        return configured_latency
 
     @classmethod
     def _settings_from_environment(cls) -> MockExternalServiceSettings:

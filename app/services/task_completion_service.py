@@ -205,7 +205,6 @@ class TaskCompletionService:
                 if existing_node.status not in {
                     NodeExecutionStatus.COMPLETED,
                     NodeExecutionStatus.FAILED,
-                    NodeExecutionStatus.SKIPPED,
                 }:
                     raise ValueError(
                         f"Node execution '{event.node_id}' cannot complete from "
@@ -228,29 +227,29 @@ class TaskCompletionService:
                     for node_execution in node_executions
                 }
                 statuses_by_id[event.node_id] = NodeExecutionStatus.FAILED
-                skipped_node_ids = evaluate_failed_dependency_node_ids(
+                failed_dependency_node_ids = evaluate_failed_dependency_node_ids(
                     workflow,
                     statuses_by_id,
                 )
-                skipped_node_ids = await transaction.node_executions.skip_pending_or_ready_nodes(
+                failed_dependency_node_ids = await transaction.node_executions.fail_pending_nodes(
                     event.execution_id,
-                    skipped_node_ids,
+                    failed_dependency_node_ids,
                     reason=f"Dependency '{event.node_id}' failed.",
                     completed_at=datetime.now(UTC),
                 )
-                for skipped_node_id in skipped_node_ids:
+                for failed_node_id in failed_dependency_node_ids:
                     await transaction.outbox_events.add_message(
                         message_id=uuid5(
                             event.event_id,
-                            f"node:{event.execution_id}:{skipped_node_id}:skipped",
+                            f"node:{event.execution_id}:{failed_node_id}:failed",
                         ),
-                        message_type="workflow.node.skipped",
+                        message_type="workflow.node.failed",
                         target_stream=WORKFLOW_EVENTS_STREAM,
                         aggregate_id=event.execution_id,
                         payload={
                             "execution_id": str(event.execution_id),
-                            "node_id": skipped_node_id,
-                            "status": "skipped",
+                            "node_id": failed_node_id,
+                            "status": "failed",
                             "reason": f"Dependency '{event.node_id}' failed.",
                         },
                     )

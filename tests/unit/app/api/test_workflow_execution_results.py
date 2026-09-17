@@ -66,8 +66,8 @@ def test_get_workflow_execution_results_returns_aggregated_output_for_completed_
     )
     non_completed_node = NodeExecution(
         workflow_execution_id=execution.execution_id,
-        node_id="node-skipped",
-        status=NodeExecutionStatus.SKIPPED,
+        node_id="node-pending",
+        status=NodeExecutionStatus.PENDING,
         output_data={"result": "ignored"},
     )
     unit_of_work = InMemoryUnitOfWork([execution], [completed_node, non_completed_node])

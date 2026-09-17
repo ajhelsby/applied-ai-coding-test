@@ -125,7 +125,30 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
         execution_id: UUID,
         node_ids: Sequence[str],
     ) -> tuple[str, ...]:
-        """Atomically promote pending nodes to ready and return claimed node IDs."""
+        """Return eligible pending node IDs without introducing a separate ready state."""
+
+        if not node_ids:
+            return ()
+
+        result = await self._session.execute(
+            update(NodeExecutionRecord)
+            .where(NodeExecutionRecord.workflow_execution_id == execution_id)
+            .where(NodeExecutionRecord.node_id.in_(node_ids))
+            .where(NodeExecutionRecord.status == NodeExecutionStatus.PENDING.value)
+            .values(updated_at=func.now())
+            .returning(NodeExecutionRecord.node_id)
+        )
+        return tuple(result.scalars().all())
+
+    async def fail_pending_nodes(
+        self,
+        execution_id: UUID,
+        node_ids: Sequence[str],
+        *,
+        reason: str,
+        completed_at: datetime,
+    ) -> tuple[str, ...]:
+        """Atomically transition pending nodes to failed."""
 
         if not node_ids:
             return ()
@@ -136,40 +159,7 @@ class SqlAlchemyNodeExecutionRepository(NodeExecutionRepository):
             .where(NodeExecutionRecord.node_id.in_(node_ids))
             .where(NodeExecutionRecord.status == NodeExecutionStatus.PENDING.value)
             .values(
-                status=NodeExecutionStatus.READY.value,
-                updated_at=func.now(),
-            )
-            .returning(NodeExecutionRecord.node_id)
-        )
-        return tuple(result.scalars().all())
-
-    async def skip_pending_or_ready_nodes(
-        self,
-        execution_id: UUID,
-        node_ids: Sequence[str],
-        *,
-        reason: str,
-        completed_at: datetime,
-    ) -> tuple[str, ...]:
-        """Atomically transition pending or ready nodes to skipped."""
-
-        if not node_ids:
-            return ()
-
-        result = await self._session.execute(
-            update(NodeExecutionRecord)
-            .where(NodeExecutionRecord.workflow_execution_id == execution_id)
-            .where(NodeExecutionRecord.node_id.in_(node_ids))
-            .where(
-                NodeExecutionRecord.status.in_(
-                    (
-                        NodeExecutionStatus.PENDING.value,
-                        NodeExecutionStatus.READY.value,
-                    )
-                )
-            )
-            .values(
-                status=NodeExecutionStatus.SKIPPED.value,
+                status=NodeExecutionStatus.FAILED.value,
                 error_message=reason,
                 error_type="FailedDependency",
                 completed_at=completed_at,

@@ -127,3 +127,34 @@ def wait_for_node_status(
         poll_interval_seconds,
         diagnostics,
     )
+
+
+def wait_for_nodes_status(
+    fetch: WorkflowFetcher,
+    execution_id: str,
+    expected_statuses: Mapping[str, str],
+    *,
+    timeout_seconds: float = 30.0,
+    poll_interval_seconds: float = 0.1,
+    diagnostics: Callable[[], str] | None = None,
+) -> WorkflowPayload:
+    """Wait for multiple nodes to reach their expected statuses in one snapshot."""
+
+    def nodes_are_ready(payload: WorkflowPayload) -> bool:
+        nodes = payload.get("nodes")
+        if not isinstance(nodes, list):
+            return False
+        statuses = {
+            node.get("node_id"): node.get("status") for node in nodes if isinstance(node, Mapping)
+        }
+        return all(statuses.get(node_id) == status for node_id, status in expected_statuses.items())
+
+    return _poll(
+        fetch,
+        nodes_are_ready,
+        execution_id,
+        f"node statuses {dict(expected_statuses)!r}",
+        timeout_seconds,
+        poll_interval_seconds,
+        diagnostics,
+    )

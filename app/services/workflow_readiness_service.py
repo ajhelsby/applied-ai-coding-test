@@ -20,7 +20,7 @@ class WorkflowReadinessDecision:
 
 
 class WorkflowReadinessService:
-    """Evaluate and promote runnable nodes to READY without dispatching."""
+    """Evaluate runnable pending nodes without dispatching."""
 
     async def evaluate(
         self,

@@ -16,8 +16,6 @@ class NodeExecutionStatus(StrEnum):
     """Lifecycle states for a node execution."""
 
     PENDING = "pending"
-    READY = "ready"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
-    SKIPPED = "skipped"
