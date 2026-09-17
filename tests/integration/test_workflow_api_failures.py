@@ -12,9 +12,7 @@ from tests.integration.fixtures.api import (
 )
 from tests.integration.fixtures.diagnostics import inspect_database
 from tests.integration.fixtures.infrastructure import InfrastructureConfig
-from tests.integration.fixtures.lifecycle import (
-    running_application_services,
-)
+from tests.integration.fixtures.lifecycle import running_application_services
 from tests.integration.fixtures.polling import wait_for_workflow_status
 
 pytestmark = pytest.mark.integration
