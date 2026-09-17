@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
 from app.domain.repositories.unit_of_work import UnitOfWork
+from app.messaging.redis.barriers import participate_in_barrier
+from app.messaging.redis.client import get_async_redis_client
 from app.messaging.redis.streams import (
     ORCHESTRATOR_COMPLETIONS_GROUP,
     WORKFLOW_TASK_COMPLETIONS_STREAM,
@@ -79,6 +82,7 @@ class TaskCompletionConsumer:
                     extra={"message_id": message_id, "stream": stream},
                 )
                 event = TaskCompletionEvent.from_stream_fields(fields)
+                await _wait_for_integration_barrier(event)
                 decision = await self._completion_service.process(
                     event, self._unit_of_work_factory()
                 )
@@ -110,3 +114,28 @@ class TaskCompletionConsumer:
                 )
                 processed += 1
         return processed
+
+
+async def _wait_for_integration_barrier(event: TaskCompletionEvent) -> None:
+    """Synchronize selected completion events only in integration tests."""
+
+    if os.getenv("INTEGRATION_TEST") != "1":
+        return
+    prefix = os.getenv("INTEGRATION_COMPLETION_BARRIER_PREFIX")
+    barrier_nodes = {
+        node_id
+        for node_id in os.getenv("INTEGRATION_COMPLETION_BARRIER_NODES", "").split(",")
+        if node_id
+    }
+    if not prefix or event.node_id not in barrier_nodes:
+        return
+
+    timeout_seconds = float(os.getenv("INTEGRATION_BARRIER_TIMEOUT_SECONDS", "30"))
+    if timeout_seconds <= 0:
+        raise ValueError("INTEGRATION_BARRIER_TIMEOUT_SECONDS must be greater than zero.")
+    await participate_in_barrier(
+        get_async_redis_client(),
+        f"{prefix}:{event.execution_id}",
+        event.node_id,
+        timeout_seconds=timeout_seconds,
+    )

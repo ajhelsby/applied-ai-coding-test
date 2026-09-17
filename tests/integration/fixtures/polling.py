@@ -158,3 +158,22 @@ def wait_for_nodes_status(
         poll_interval_seconds,
         diagnostics,
     )
+
+
+def node_statuses(payload: WorkflowPayload) -> dict[str, str]:
+    """Return persisted node statuses from a workflow status payload."""
+
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list):
+        raise WorkflowPollingError(f"Workflow endpoint returned invalid nodes: {nodes!r}")
+
+    statuses: dict[str, str] = {}
+    for node in nodes:
+        if not isinstance(node, Mapping):
+            raise WorkflowPollingError(f"Workflow endpoint returned an invalid node: {node!r}")
+        node_id = node.get("node_id")
+        status = node.get("status")
+        if not isinstance(node_id, str) or not isinstance(status, str):
+            raise WorkflowPollingError(f"Workflow endpoint returned an invalid node: {node!r}")
+        statuses[node_id] = status
+    return statuses

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from typing import Any
 
@@ -9,6 +10,7 @@ from app.domain.errors.validation import WorkflowValidationError
 from app.domain.validation.rules._workflow import error, nodes_from
 
 ALLOWED_HANDLERS = frozenset({"input", "output", "call_external_service"})
+INTEGRATION_HANDLER = "integration_barrier"
 
 
 class HandlerDefinitionRule:
@@ -16,15 +18,19 @@ class HandlerDefinitionRule:
 
     def validate(self, workflow: Mapping[str, Any]) -> list[WorkflowValidationError]:
         errors: list[WorkflowValidationError] = []
+        allowed_handlers = ALLOWED_HANDLERS
+        if os.getenv("INTEGRATION_TEST") == "1":
+            allowed_handlers = allowed_handlers | {INTEGRATION_HANDLER}
         for index, node in nodes_from(workflow):
             handler = node.get("handler")
-            if not isinstance(handler, str) or handler not in ALLOWED_HANDLERS:
+            if not isinstance(handler, str) or handler not in allowed_handlers:
                 node_id = node.get("id")
                 errors.append(
                     error(
                         "invalid_handler",
-                        "Node property 'handler' must be one of: input, output, "
-                        "call_external_service.",
+                        "Node property 'handler' must be one of: "
+                        + ", ".join(sorted(allowed_handlers))
+                        + ".",
                         f"dag.nodes[{index}].handler",
                         node_id=node_id if isinstance(node_id, str) else None,
                     )

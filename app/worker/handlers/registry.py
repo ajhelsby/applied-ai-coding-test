@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from app.messaging.task_messages import NodeTaskMessage
 from app.worker.handlers.base import NodeHandler
 from app.worker.handlers.input import InputNodeHandler
+from app.worker.handlers.integration_barrier import IntegrationBarrierNodeHandler
 from app.worker.handlers.mock_external_service import MockExternalServiceNodeHandler
 from app.worker.handlers.mock_llm import MockLlmServiceNodeHandler
 from app.worker.handlers.output import OutputNodeHandler
@@ -36,6 +37,8 @@ class NodeHandlerRegistry:
         match handler_name:
             case "input":
                 return InputNodeHandler()
+            case "integration_barrier":
+                return IntegrationBarrierNodeHandler()
             case "output":
                 return OutputNodeHandler()
             case "call_external_service":
