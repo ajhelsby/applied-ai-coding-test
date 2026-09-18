@@ -55,14 +55,14 @@ def _poll(
     latest = _payload(fetch)
     while True:
         status = latest.get("status")
+        if expected(latest):
+            return latest
         if status in _TERMINAL_FAILURE_STATUSES:
             service_diagnostics = "" if diagnostics is None else f"\n{diagnostics()}"
             raise WorkflowPollingError(
                 f"Workflow {execution_id} reached unexpected terminal state {status!r} "
                 f"while waiting for {expectation}. {_diagnostics(latest)}{service_diagnostics}"
             )
-        if expected(latest):
-            return latest
         if time.monotonic() >= deadline:
             service_diagnostics = "" if diagnostics is None else f"\n{diagnostics()}"
             raise WorkflowPollingError(

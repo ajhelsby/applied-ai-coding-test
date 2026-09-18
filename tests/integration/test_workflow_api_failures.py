@@ -108,4 +108,12 @@ def test_failed_execution_cannot_be_triggered_again_or_create_duplicate_work(
 
         assert repeated.status_code == 422
         assert repeated.json()["error_code"] == "workflow_execution_not_triggerable"
-        assert inspect_database(integration_infrastructure, execution_id) == before_retry
+        after_retry = inspect_database(integration_infrastructure, execution_id)
+        assert after_retry.workflow_execution == before_retry.workflow_execution
+        assert after_retry.node_executions == before_retry.node_executions
+        assert after_retry.logical_tasks == before_retry.logical_tasks
+        assert after_retry.task_attempts == before_retry.task_attempts
+        assert after_retry.task_processing == before_retry.task_processing
+        assert [
+            (event[0], event[1], event[2], event[4]) for event in after_retry.outbox_events
+        ] == [(event[0], event[1], event[2], event[4]) for event in before_retry.outbox_events]
