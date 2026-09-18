@@ -88,16 +88,26 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml up --build --
 ### Verification
 
 ```bash
+uv run pytest -q tests/docker
+```
+
+The Docker suite builds and exercises the actual Compose topology through the public API. It
+covers the fan-out/fan-in workflow, scaled API and Worker replicas, Worker recovery, API restart,
+and persisted state across application-container restarts. Docker must be running locally.
+
+For a lightweight health and documentation check only:
+
+```bash
 bash tests/docker/verify_compose.sh
 ```
 
 ### Stop and clean up
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose.yml down
+docker compose --env-file docker/.env -f docker/docker-compose.yml down -v --remove-orphans
 ```
 
-PostgreSQL data is persisted in `docker/db/postgres_data`.
+The Docker test suite uses an isolated named PostgreSQL volume and removes it during teardown.
 
 ## Architecture decision: Docker image targets
 
