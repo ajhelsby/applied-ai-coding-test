@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.7](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.6...v0.0.7) (2026-09-18)
+
+
+### Features
+
+* **#38:** Add race-condition test ([#88](https://github.com/ajhelsby/applied-ai-coding-test/issues/88)) ([eda4633](https://github.com/ajhelsby/applied-ai-coding-test/commit/eda4633d1720b93a355628bc0765a6de963d2cef))
+* **#39:** Test idempotency by delivering duplicate Redis task messages and verifying consistent processing and ([#89](https://github.com/ajhelsby/applied-ai-coding-test/issues/89)) ([81c1e08](https://github.com/ajhelsby/applied-ai-coding-test/commit/81c1e08654549a3cc72663afaee2574329304bc0))
+
+
+### Bug Fixes
+
+* **#92:** Fix task retry logic, update polling condition, add default config in test nodes, and improve test a ([#93](https://github.com/ajhelsby/applied-ai-coding-test/issues/93)) ([50adde5](https://github.com/ajhelsby/applied-ai-coding-test/commit/50adde53ec2c185ad833d22d227c2cf02f5d18fa))
+
+
+### Tests
+
+* **#35:** Update testing instructions with detailed guidance on test structure, layers, and best practices ([#84](https://github.com/ajhelsby/applied-ai-coding-test/issues/84)) ([e40b4af](https://github.com/ajhelsby/applied-ai-coding-test/commit/e40b4af2c02fa3aea794fbbc1dcca6621ba63ca3))
+* **#36:** Add improved integration tests ([#86](https://github.com/ajhelsby/applied-ai-coding-test/issues/86)) ([3e3dcc4](https://github.com/ajhelsby/applied-ai-coding-test/commit/3e3dcc4ce63deb4b30db2635db79e7b716364e96))
+* **#37:** Add fan-out/fan-in integration test ([#87](https://github.com/ajhelsby/applied-ai-coding-test/issues/87)) ([554cff9](https://github.com/ajhelsby/applied-ai-coding-test/commit/554cff97a97648bf18eaba9f3a9fd5bc7a66c14c))
+* **#40:** Add API integration tests ([#90](https://github.com/ajhelsby/applied-ai-coding-test/issues/90)) ([9c1ddd4](https://github.com/ajhelsby/applied-ai-coding-test/commit/9c1ddd4a71b1332c6eb6933b8482b267f09c7091))
+* **#43:** Add test for docker ([#91](https://github.com/ajhelsby/applied-ai-coding-test/issues/91)) ([b5a7011](https://github.com/ajhelsby/applied-ai-coding-test/commit/b5a701175a0eb1a7a3cede387ae79c5a1fde130f))
+
 ## [0.0.6](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.5...v0.0.6) (2026-09-16)
 
 
