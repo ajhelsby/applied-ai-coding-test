@@ -89,7 +89,9 @@ class SqlAlchemyTaskRetryRepository(TaskRetryRepository):
         attempt = await self._get_attempt(attempt_id)
         if attempt is None or attempt.task_id != task_id:
             raise ValueError(f"Attempt '{attempt_id}' does not belong to task '{task_id}'.")
-        if attempt.status in {"completed", "failed"}:
+        if attempt.failure_event_id is not None or (
+            attempt.status == "completed" and attempt.completion_event_id != failure_event_id
+        ):
             return RetryDecision(RetryDecisionOutcome.DUPLICATE)
 
         await self._session.execute(
