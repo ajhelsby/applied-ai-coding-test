@@ -63,9 +63,7 @@ class DockerApiClient:
         response = self._request("POST", "/workflow", json=payload, expected_status=201)
         execution_id = response.get("execution_id")
         if not isinstance(execution_id, str):
-            raise DockerApiError(
-                f"Submission response did not contain execution_id: {response!r}."
-            )
+            raise DockerApiError(f"Submission response did not contain execution_id: {response!r}.")
         try:
             return UUID(execution_id)
         except ValueError as error:

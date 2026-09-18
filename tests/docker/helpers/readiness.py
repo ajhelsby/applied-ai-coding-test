@@ -73,8 +73,7 @@ def _service_is_healthy(
     if len(records) < replicas:
         return False
     return all(
-        record.get("State") == "running" and record.get("Health") == "healthy"
-        for record in records
+        record.get("State") == "running" and record.get("Health") == "healthy" for record in records
     )
 
 
