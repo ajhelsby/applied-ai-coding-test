@@ -39,7 +39,7 @@ _WORKFLOW_STREAMS = (
 
 
 def _input_node(node_id: str = "input") -> dict[str, object]:
-    return {"id": node_id, "handler": "input", "dependencies": []}
+    return {"id": node_id, "handler": "input", "dependencies": [], "config": {}}
 
 
 def _external_node(
