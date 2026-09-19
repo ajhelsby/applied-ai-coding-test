@@ -84,7 +84,7 @@ def selected_infrastructure() -> Iterator[InfrastructureConfig]:
 
     password = secrets.token_urlsafe(24)
     postgres = PostgresContainer(
-        image="postgres:17",
+        image="postgres:16.10",
         username="integration_test",
         password=password,
         dbname="integration_test",
