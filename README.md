@@ -172,12 +172,12 @@ this coding test; they do not call real external services.
 
 ## API endpoint summary
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `POST` | `/workflow` | Validate and persist a workflow definition |
-| `POST` | `/workflow/trigger/{execution_id}` | Start a pending execution asynchronously |
-| `GET` | `/workflows/{execution_id}` | Read persisted workflow and node status |
-| `GET` | `/workflows/{execution_id}/results` | Read persisted outputs after successful completion |
-| `GET` | `/health` | Check API health |
+| Method | Endpoint                            | Purpose                                            |
+| ------ | ----------------------------------- | -------------------------------------------------- |
+| `POST` | `/workflow`                         | Validate and persist a workflow definition         |
+| `POST` | `/workflow/trigger/{execution_id}`  | Start a pending execution asynchronously           |
+| `GET`  | `/workflows/{execution_id}`         | Read persisted workflow and node status            |
+| `GET`  | `/workflows/{execution_id}/results` | Read persisted outputs after successful completion |
+| `GET`  | `/health`                           | Check API health                                   |
 
 See [API examples](docs/API_EXAMPLES.md) for request and response bodies.

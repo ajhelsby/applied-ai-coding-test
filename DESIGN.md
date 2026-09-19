@@ -434,12 +434,12 @@ recovery mechanism for application state and outbound messages.
 
 The repository separates tests by boundary:
 
-| Directory | Purpose |
-| --- | --- |
-| `tests/unit/` | Logic without PostgreSQL, Redis, or Docker |
+| Directory            | Purpose                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `tests/unit/`        | Logic without PostgreSQL, Redis, or Docker                                              |
 | `tests/integration/` | Real PostgreSQL and Redis, process boundaries, orchestration, concurrency, and recovery |
-| `tests/load/` | Intended location for throughput, contention, and breaking-point tests |
-| `tests/docker/` | End-to-end validation of the actual Compose topology |
+| `tests/load/`        | Intended location for throughput, contention, and breaking-point tests                  |
+| `tests/docker/`      | End-to-end validation of the actual Compose topology                                    |
 
 The repository currently contains unit, integration, and Docker suites; a
 `tests/load/` suite is not currently present.
@@ -459,18 +459,18 @@ application restart, Worker recovery, and scaled Compose execution.
 
 ## Decision summary and trade-offs
 
-| Decision | Problem addressed | Benefit | Trade-off |
-| --- | --- | --- | --- |
-| PostgreSQL is the source of truth | Distributed processes need durable shared state | Queries, locks, recovery, and results have one authority | Database latency and lock contention bound throughput |
-| Redis Streams is transport only | Services need asynchronous decoupling | Consumer groups, pending messages, and `XAUTOCLAIM` support recovery | Delivery is at least once and requires idempotent consumers |
-| Separate API, Orchestrator, and Worker roles | HTTP intake, graph coordination, and task execution have different workloads | Each role scales and fails independently | More process boundaries and operational coordination |
-| Persisted execution state | Process-local state is lost during restart or scaling | Any replica can resume from PostgreSQL | More database reads and writes |
-| Conditional updates and execution-row locks | Concurrent dispatch and fan-in can race | One logical node claim and one consistent fan-in decision | Completion for one execution is serialized |
-| Deterministic task IDs | Duplicate messages must identify one logical task | Stable correlation and idempotency keys | A node can have only one logical task per execution |
-| Transactional outbox | PostgreSQL and Redis cannot share an atomic commit | Prevents committed state transitions from losing messages | Publication is asynchronous and may duplicate physical messages |
-| Configurable retries | Transient task failures should not immediately fail a workflow | Backoff and durable attempts make retry behavior explicit | Retries add latency and can amplify load |
-| Immediate failure propagation | Downstream nodes must not wait on impossible dependencies | Workflows reach a clear terminal failure state | Partial successful branch results are not exposed as final results |
-| Mock external handlers | The coding test needs deterministic, infrastructure-free handlers | Repeatable tests without external credentials or services | The system does not yet demonstrate real external side-effect semantics |
+| Decision                                     | Problem addressed                                                            | Benefit                                                              | Trade-off                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| PostgreSQL is the source of truth            | Distributed processes need durable shared state                              | Queries, locks, recovery, and results have one authority             | Database latency and lock contention bound throughput                   |
+| Redis Streams is transport only              | Services need asynchronous decoupling                                        | Consumer groups, pending messages, and `XAUTOCLAIM` support recovery | Delivery is at least once and requires idempotent consumers             |
+| Separate API, Orchestrator, and Worker roles | HTTP intake, graph coordination, and task execution have different workloads | Each role scales and fails independently                             | More process boundaries and operational coordination                    |
+| Persisted execution state                    | Process-local state is lost during restart or scaling                        | Any replica can resume from PostgreSQL                               | More database reads and writes                                          |
+| Conditional updates and execution-row locks  | Concurrent dispatch and fan-in can race                                      | One logical node claim and one consistent fan-in decision            | Completion for one execution is serialized                              |
+| Deterministic task IDs                       | Duplicate messages must identify one logical task                            | Stable correlation and idempotency keys                              | A node can have only one logical task per execution                     |
+| Transactional outbox                         | PostgreSQL and Redis cannot share an atomic commit                           | Prevents committed state transitions from losing messages            | Publication is asynchronous and may duplicate physical messages         |
+| Configurable retries                         | Transient task failures should not immediately fail a workflow               | Backoff and durable attempts make retry behavior explicit            | Retries add latency and can amplify load                                |
+| Immediate failure propagation                | Downstream nodes must not wait on impossible dependencies                    | Workflows reach a clear terminal failure state                       | Partial successful branch results are not exposed as final results      |
+| Mock external handlers                       | The coding test needs deterministic, infrastructure-free handlers            | Repeatable tests without external credentials or services            | The system does not yet demonstrate real external side-effect semantics |
 
 The resulting guarantees are intentionally scoped: durable persisted state,
 at-least-once transport, exactly-once logical task claims, and idempotent
