@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.8](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.7...v0.0.8) (2026-09-19)
+
+
+### Bug Fixes
+
+* **#96:** Update documentation to clarify Docker Compose setup and API connection details ([#97](https://github.com/ajhelsby/applied-ai-coding-test/issues/97)) ([2e0a3b3](https://github.com/ajhelsby/applied-ai-coding-test/commit/2e0a3b3be6c19c83355ce612400aa7c90a40fac5))
+
+
+### Docs
+
+* **#41:** Document design decisions and system architecture for work ([#94](https://github.com/ajhelsby/applied-ai-coding-test/issues/94)) ([a0c21f8](https://github.com/ajhelsby/applied-ai-coding-test/commit/a0c21f888bd6c90c4bf17277763041c92d0ec3a0))
+
 ## [0.0.7](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.6...v0.0.7) (2026-09-18)
 
 
