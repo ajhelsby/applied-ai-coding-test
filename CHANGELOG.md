@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.9](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.8...v0.0.9) (2026-09-20)
+
+
+### Features
+
+* **#98:** Add support for llm_service handler with prompt validation and update API version ([#101](https://github.com/ajhelsby/applied-ai-coding-test/issues/101)) ([e7427ee](https://github.com/ajhelsby/applied-ai-coding-test/commit/e7427ee6513e81161bbf2344b4d502feadd0df13))
+* **#98:** Add support for llm_service handler with prompt validation and update API version ([#99](https://github.com/ajhelsby/applied-ai-coding-test/issues/99)) ([35d5ff0](https://github.com/ajhelsby/applied-ai-coding-test/commit/35d5ff0de0375941eaf7019d8564c34a6f5606df))
+
 ## [0.0.8](https://github.com/ajhelsby/applied-ai-coding-test/compare/v0.0.7...v0.0.8) (2026-09-19)
 
 
