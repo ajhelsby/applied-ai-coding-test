@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +20,14 @@ _WORKFLOW_OPERATIONS = {
         "WorkflowExecutionResultsResponsePayload",
     ),
 }
+
+
+def _application_version() -> str:
+    manifest_path = Path(__file__).resolve().parents[2] / ".release-please-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    version = manifest.get(".") if isinstance(manifest, dict) else None
+    assert isinstance(version, str)
+    return version
 
 
 def _schema_ref(schema: Mapping[str, object]) -> str:
@@ -46,7 +56,7 @@ def test_openapi_documents_all_workflow_operations_and_contracts(
     document = response.json()
     assert document["openapi"].startswith("3.")
     assert document["info"]["title"] == "Workflow Engine API"
-    assert document["info"]["version"] == "0.0.8"
+    assert document["info"]["version"] == _application_version()
 
     paths = document["paths"]
     components = document["components"]["schemas"]
