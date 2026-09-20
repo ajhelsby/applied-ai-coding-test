@@ -9,7 +9,7 @@ from typing import Any
 from app.domain.errors.validation import WorkflowValidationError
 from app.domain.validation.rules._workflow import error, nodes_from
 
-ALLOWED_HANDLERS = frozenset({"input", "output", "call_external_service"})
+ALLOWED_HANDLERS = frozenset({"input", "output", "call_external_service", "llm_service"})
 INTEGRATION_HANDLER = "integration_barrier"
 
 
@@ -62,6 +62,20 @@ class NodeConfigurationRule:
                             "Handler 'call_external_service' requires a non-empty "
                             "string 'config.url'.",
                             f"{path}.url",
+                            node_id=context,
+                        )
+                    )
+            elif handler == "llm_service":
+                if (
+                    not isinstance(config, Mapping)
+                    or not isinstance(config.get("prompt"), str)
+                    or not config["prompt"].strip()
+                ):
+                    errors.append(
+                        error(
+                            "invalid_handler_config",
+                            "Handler 'llm_service' requires a non-empty string 'config.prompt'.",
+                            f"{path}.prompt",
                             node_id=context,
                         )
                     )

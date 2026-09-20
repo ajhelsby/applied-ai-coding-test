@@ -117,6 +117,32 @@ def test_handler_definition_rule_rejects_unsupported_handlers(
         ),
         (
             {
+                "id": "generate",
+                "handler": "llm_service",
+                "dependencies": [],
+            },
+            "invalid_handler_config",
+        ),
+        (
+            {
+                "id": "generate",
+                "handler": "llm_service",
+                "dependencies": [],
+                "config": {"prompt": " "},
+            },
+            "invalid_handler_config",
+        ),
+        (
+            {
+                "id": "generate",
+                "handler": "llm_service",
+                "dependencies": [],
+                "config": {"prompt": 42},
+            },
+            "invalid_handler_config",
+        ),
+        (
+            {
                 "id": "input",
                 "handler": "input",
                 "dependencies": [],
@@ -132,6 +158,42 @@ def test_node_configuration_rule_enforces_handler_contracts(
     workflow = {"name": "workflow", "dag": {"nodes": [node]}}
 
     assert NodeConfigurationRule().validate(workflow)[0].code == code
+
+
+def test_node_configuration_rule_allows_extra_llm_service_config_keys() -> None:
+    workflow = {
+        "name": "workflow",
+        "dag": {
+            "nodes": [
+                {
+                    "id": "generate",
+                    "handler": "llm_service",
+                    "dependencies": [],
+                    "config": {"prompt": "Summarize this.", "temperature": 0.2},
+                }
+            ]
+        },
+    }
+
+    assert NodeConfigurationRule().validate(workflow) == []
+
+
+def test_handler_definition_rule_accepts_llm_service() -> None:
+    workflow = {
+        "name": "workflow",
+        "dag": {
+            "nodes": [
+                {
+                    "id": "generate",
+                    "handler": "llm_service",
+                    "dependencies": [],
+                    "config": {"prompt": "Generate a response."},
+                }
+            ]
+        },
+    }
+
+    assert HandlerDefinitionRule().validate(workflow) == []
 
 
 def test_dependency_reference_rule_rejects_unknown_dependencies(

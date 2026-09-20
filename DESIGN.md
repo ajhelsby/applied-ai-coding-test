@@ -22,6 +22,12 @@ node state, JSON inputs and outputs, retry attempts, task-processing state, and
 outbox records. Redis Streams is only the asynchronous transport. Redis does
 not contain canonical workflow state.
 
+The repository's supplied workflow example (`docs/executor_sample_payload.pdf`)
+uses `POST /workflows`, while the challenge specification defines
+`POST /workflow` and the implementation follows the singular endpoint. The
+example should therefore be treated as payload guidance; its route must be
+adjusted when using it with this API.
+
 ```mermaid
 flowchart LR
     Client[Client] --> API[FastAPI]
@@ -416,7 +422,7 @@ Compose defines:
 - `worker`: Redis task consumer and handler runtime;
 - `migrate`: one-shot Alembic migration job;
 - `redis-init`: one-shot stream and consumer-group initialization job;
-- `postgres`: PostgreSQL 17 with a named data volume; and
+- `postgres`: PostgreSQL 16.10 with a named data volume; and
 - `redis`: Redis 7.4 with health checks.
 
 Services use environment-provided `DATABASE_URL`, `MIGRATE_DATABASE_URL`, and

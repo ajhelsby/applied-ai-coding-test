@@ -45,6 +45,8 @@ def test_openapi_documents_all_workflow_operations_and_contracts(
     assert response.headers["content-type"].startswith("application/json")
     document = response.json()
     assert document["openapi"].startswith("3.")
+    assert document["info"]["title"] == "Workflow Engine API"
+    assert document["info"]["version"] == "0.0.8"
 
     paths = document["paths"]
     components = document["components"]["schemas"]
