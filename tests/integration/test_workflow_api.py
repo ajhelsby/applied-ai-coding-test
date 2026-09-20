@@ -352,6 +352,47 @@ def test_status_and_results_report_completed_nodes_and_resolved_templates(
     }
 
 
+def test_llm_service_workflow_is_accepted_and_completed_through_public_api(
+    api_client: TestClient,
+    application_services: tuple[ServiceProcess, ServiceProcess],
+) -> None:
+    orchestrator, worker = application_services
+    execution_id = submit_workflow(
+        api_client,
+        [
+            _input_node(),
+            {
+                "id": "generate",
+                "handler": "llm_service",
+                "dependencies": ["input"],
+                "config": {
+                    "prompt": "Summarize {{ input.value }}",
+                    "temperature": 0.2,
+                },
+            },
+        ],
+        name_prefix="llm-api-workflow",
+    )
+    trigger_workflow(api_client, execution_id, input_data={"value": "integration-value"})
+
+    completed = wait_for_workflow_status(
+        lambda: get_workflow_status(api_client, execution_id),
+        str(execution_id),
+        "COMPLETED",
+        diagnostics=lambda: f"{orchestrator.output()}\n{worker.output()}",
+    )
+    assert completed["status"] == "COMPLETED"
+
+    results = get_workflow_results(api_client, execution_id)
+    assert results["status"] == "COMPLETED"
+    result_by_node = {
+        result["node_id"]: result for result in results["results"] if isinstance(result, Mapping)
+    }
+    assert result_by_node["generate"]["output_data"]["response"].endswith(
+        "Summarize integration-value"
+    )
+
+
 def test_workflow_lifecycle_is_available_through_public_http_contract(
     api_client: TestClient,
     application_services: tuple[ServiceProcess, ServiceProcess],

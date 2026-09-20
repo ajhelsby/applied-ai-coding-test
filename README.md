@@ -240,11 +240,13 @@ with `202 Accepted`; execution continues through Redis Streams and can be
 monitored with the status endpoint. A successful execution reaches `COMPLETED`;
 any node failure causes the workflow to reach `FAILED`.
 
-The public workflow validator accepts `input`, `output`, and
-`call_external_service`. The Worker registry also contains the
-`integration_barrier` and `llm_service` handlers for integration/test
-scenarios. The external-service and LLM handlers are deterministic mocks for
-this coding test; they do not call real external services.
+The public workflow validator accepts `input`, `output`,
+`call_external_service`, and `llm_service`. The Worker registry also contains
+the `integration_barrier` handler for integration/test scenarios. The
+external-service and LLM handlers are deterministic mocks for this coding test;
+they do not call real external services. LLM nodes require a non-empty string
+`config.prompt`, which may contain templates referencing completed dependency
+outputs.
 
 ## API endpoint summary
 
